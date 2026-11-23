@@ -1,99 +1,271 @@
-import { DialogueScript, Student } from '../types';
+import { Classroom, DialogueScript, Student, StudentGender } from '../types';
+import {
+  FEMALE_PRESETS,
+  getChibiPreset,
+  inferGenderFromName,
+  MALE_PRESETS,
+} from './chibiCatalog';
 
-// Soft pastel-harmonized Ca Dong indigo, slate, plum & sage tunic bases
-const OUTFIT_PALETTE = [
-  '#3f4d6b', // Pastel indigo navy
-  '#4d5a78', // Soft slate blue
-  '#5c4966', // Muted plum indigo
-  '#3f5e5a', // Deep mountain sage-indigo
-  '#4b4b68', // Twilight periwinkle-indigo
-  '#574852', // Warm charcoal-plum
-];
+const LEGACY_STUDENTS_STORAGE_KEY = 'den_truong_thoi_nao_students_v2';
+const CLASSROOMS_STORAGE_KEY = 'den_truong_thoi_nao_classrooms_v3';
 
-// Soft harmonious pastel backpack colors
-const BACKPACK_PALETTE = [
-  '#f28b82', // Pastel coral rose
-  '#81c995', // Pastel mint sage
-  '#fdd663', // Pastel buttercup
-  '#8ab4f8', // Pastel sky blue
-  '#f48fb1', // Pastel blossom pink
-  '#ffab76', // Pastel apricot
-];
+export interface ClassroomsStore {
+  activeClassId: string;
+  classes: Classroom[];
+}
 
-const ACCENT_PALETTE = [
-  '#fde68a', // Soft butter yellow
-  '#fca5a5', // Soft rose
-  '#a7f3d0', // Soft mint
-  '#bae6fd', // Soft sky
-  '#fbcfe8', // Soft sakura
-  '#fed7aa', // Soft peach
-];
-
-const HAIR_COLORS = [
-  '#3b2f2f', // Warm cocoa espresso
-  '#4a3728', // Soft chestnut brown
-  '#2f3245', // Soft midnight indigo
-  '#523a34', // Honey dark brown
-  '#3e323c', // Soft plum charcoal
-  '#44362d', // Roasted walnut
-];
-
-const EYE_COLORS = [
-  '#4b3328',
-  '#3b4263',
-  '#5b3e31',
-  '#364f47',
-  '#513847',
-  '#493a2b',
-];
+const HAIR_STYLE_INDEX_MAP: Record<string, number> = {
+  short: 0,
+  bangs: 1,
+  shoulder: 2,
+  braids: 3,
+  high_ponytail: 4,
+  twin_tails: 5,
+};
 
 export function createStudentRecord(
   name: string,
   index = 0,
   avatarUrl?: string,
+  gender?: StudentGender,
+  preferredPresetId?: string,
 ): Student {
   const cleanName = name.trim();
+  const resolvedGender: StudentGender = gender ?? inferGenderFromName(cleanName);
+  const preset = getChibiPreset(preferredPresetId, resolvedGender, index);
+
   return {
     id: `stu-${Date.now()}-${Math.random().toString(36).slice(2, 7)}-${index}`,
     name: cleanName,
+    gender: resolvedGender,
+    presetId: preset.id,
     avatarUrl,
-    hairStyle: index % 6,
-    hairColor: HAIR_COLORS[index % HAIR_COLORS.length],
-    eyeColor: EYE_COLORS[index % EYE_COLORS.length],
-    outfitColor: OUTFIT_PALETTE[index % OUTFIT_PALETTE.length],
-    backpackColor: BACKPACK_PALETTE[index % BACKPACK_PALETTE.length],
-    accentColor: ACCENT_PALETTE[index % ACCENT_PALETTE.length],
+    hairStyle: HAIR_STYLE_INDEX_MAP[preset.hairStyle] ?? 0,
+    hairColor: preset.hairColor,
+    eyeColor: preset.eyeColor,
+    outfitColor: preset.tunicBase,
+    backpackColor: preset.backpackColor,
+    accentColor: preset.backpackTrim,
   };
 }
 
-export function normalizeStudentRecord(raw: Partial<Student>, index: number): Student {
+export function normalizeStudentRecord(
+  raw: Partial<Student>,
+  index: number,
+): Student {
+  const name = (raw.name || `Học sinh ${index + 1}`).trim();
+  const gender: StudentGender =
+    raw.gender === 'male' || raw.gender === 'female'
+      ? raw.gender
+      : inferGenderFromName(name);
+  const preset = getChibiPreset(raw.presetId, gender, index);
+
   return {
     id: raw.id || `stu-mig-${index}-${Date.now()}`,
-    name: raw.name || `Học sinh ${index + 1}`,
+    name,
+    gender,
+    presetId: preset.id,
     avatarUrl: raw.avatarUrl,
-    hairStyle: typeof raw.hairStyle === 'number' ? raw.hairStyle % 6 : index % 6,
-    hairColor: raw.hairColor || HAIR_COLORS[index % HAIR_COLORS.length],
-    eyeColor: raw.eyeColor || EYE_COLORS[index % EYE_COLORS.length],
-    outfitColor: raw.outfitColor || OUTFIT_PALETTE[index % OUTFIT_PALETTE.length],
-    backpackColor: raw.backpackColor || BACKPACK_PALETTE[index % BACKPACK_PALETTE.length],
-    accentColor: raw.accentColor || ACCENT_PALETTE[index % ACCENT_PALETTE.length],
+    hairStyle: HAIR_STYLE_INDEX_MAP[preset.hairStyle] ?? 0,
+    hairColor: preset.hairColor,
+    eyeColor: preset.eyeColor,
+    outfitColor: preset.tunicBase,
+    backpackColor: preset.backpackColor,
+    accentColor: preset.backpackTrim,
   };
 }
 
-export const DEFAULT_STUDENTS: Student[] = [
-  createStudentRecord('Hồ Văn Tùng', 0),
-  createStudentRecord('Hồ Thị Mai', 1),
-  createStudentRecord('Đinh Văn Nam', 2),
-  createStudentRecord('Đinh Thị Lan', 3),
-  createStudentRecord('Hồ Văn Hải', 4),
-  createStudentRecord('Đinh Thị Hoa', 5),
-  createStudentRecord('Hồ Văn Minh', 6),
-  createStudentRecord('Hồ Thị Thu', 7),
-  createStudentRecord('Đinh Văn Long', 8),
-  createStudentRecord('Hồ Thị Ngọc', 9),
-  createStudentRecord('Đinh Văn Bảo', 10),
-  createStudentRecord('Hồ Thị Hương', 11),
+/**
+ * Assign unique non-repeating presets per gender across a student list
+ * (15 distinct boy presets + 15 distinct girl presets = 30 unique students).
+ */
+export function buildStudentsWithUniquePresets(
+  entries: {
+    name: string;
+    gender: StudentGender;
+    existing?: Student;
+    preferredPresetId?: string;
+  }[],
+): Student[] {
+  let maleCursor = 0;
+  let femaleCursor = 0;
+
+  return entries.map((entry, idx) => {
+    const pool = entry.gender === 'female' ? FEMALE_PRESETS : MALE_PRESETS;
+    const cursor = entry.gender === 'female' ? femaleCursor++ : maleCursor++;
+
+    let chosenPresetId = entry.preferredPresetId;
+    if (chosenPresetId) {
+      const valid = pool.some((p) => p.id === chosenPresetId);
+      if (!valid) chosenPresetId = undefined;
+    }
+
+    if (!chosenPresetId) {
+      chosenPresetId = pool[cursor % pool.length].id;
+    }
+
+    const preset = getChibiPreset(chosenPresetId, entry.gender, cursor);
+
+    if (entry.existing) {
+      return {
+        ...entry.existing,
+        name: entry.name.trim(),
+        gender: entry.gender,
+        presetId: preset.id,
+        hairStyle: HAIR_STYLE_INDEX_MAP[preset.hairStyle] ?? 0,
+        hairColor: preset.hairColor,
+        eyeColor: preset.eyeColor,
+        outfitColor: preset.tunicBase,
+        backpackColor: preset.backpackColor,
+        accentColor: preset.backpackTrim,
+      };
+    }
+
+    return createStudentRecord(
+      entry.name,
+      idx,
+      undefined,
+      entry.gender,
+      preset.id,
+    );
+  });
+}
+
+const DEFAULT_12_SAMPLE: { name: string; gender: StudentGender }[] = [
+  { name: 'Hồ Văn Tùng', gender: 'male' },
+  { name: 'Hồ Thị Mai', gender: 'female' },
+  { name: 'Đinh Văn Nam', gender: 'male' },
+  { name: 'Đinh Thị Lan', gender: 'female' },
+  { name: 'Hồ Văn Hải', gender: 'male' },
+  { name: 'Đinh Thị Hoa', gender: 'female' },
+  { name: 'Hồ Văn Minh', gender: 'male' },
+  { name: 'Hồ Thị Thu', gender: 'female' },
+  { name: 'Đinh Văn Long', gender: 'male' },
+  { name: 'Hồ Thị Ngọc', gender: 'female' },
+  { name: 'Đinh Văn Bảo', gender: 'male' },
+  { name: 'Hồ Thị Hương', gender: 'female' },
 ];
+
+export const SAMPLE_30_CLASS_NAMES: { name: string; gender: StudentGender }[] = [
+  { name: 'Hồ Văn Tùng', gender: 'male' },
+  { name: 'Hồ Thị Mai', gender: 'female' },
+  { name: 'Đinh Văn Nam', gender: 'male' },
+  { name: 'Đinh Thị Lan', gender: 'female' },
+  { name: 'Hồ Văn Hải', gender: 'male' },
+  { name: 'Đinh Thị Hoa', gender: 'female' },
+  { name: 'Hồ Văn Minh', gender: 'male' },
+  { name: 'Hồ Thị Thu', gender: 'female' },
+  { name: 'Đinh Văn Long', gender: 'male' },
+  { name: 'Hồ Thị Ngọc', gender: 'female' },
+  { name: 'Đinh Văn Bảo', gender: 'male' },
+  { name: 'Hồ Thị Hương', gender: 'female' },
+  { name: 'Hồ Văn Quân', gender: 'male' },
+  { name: 'Đinh Thị Linh', gender: 'female' },
+  { name: 'Đinh Văn Khang', gender: 'male' },
+  { name: 'Hồ Thị Trang', gender: 'female' },
+  { name: 'Hồ Văn Đức', gender: 'male' },
+  { name: 'Đinh Thị Thảo', gender: 'female' },
+  { name: 'Đinh Văn Tuấn', gender: 'male' },
+  { name: 'Hồ Thị Yến', gender: 'female' },
+  { name: 'Hồ Văn Hùng', gender: 'male' },
+  { name: 'Đinh Thị Nhung', gender: 'female' },
+  { name: 'Đinh Văn Kiên', gender: 'male' },
+  { name: 'Hồ Thị Quỳnh', gender: 'female' },
+  { name: 'Hồ Văn Phúc', gender: 'male' },
+  { name: 'Đinh Thị Vy', gender: 'female' },
+  { name: 'Đinh Văn Hoàng', gender: 'male' },
+  { name: 'Hồ Thị Ngân', gender: 'female' },
+  { name: 'Hồ Văn Phong', gender: 'male' },
+  { name: 'Đinh Thị Trâm', gender: 'female' },
+];
+
+export const DEFAULT_STUDENTS: Student[] = buildStudentsWithUniquePresets(
+  DEFAULT_12_SAMPLE,
+);
+
+export function createClassroomRecord(
+  name: string,
+  students: Student[] = [],
+): Classroom {
+  return {
+    id: `cls-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    name: name.trim() || 'Lớp mới',
+    students,
+    calledIds: [],
+    updatedAt: Date.now(),
+  };
+}
+
+export function loadClassroomsStore(): ClassroomsStore {
+  try {
+    const raw = localStorage.getItem(CLASSROOMS_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as Partial<ClassroomsStore>;
+      if (Array.isArray(parsed.classes) && parsed.classes.length > 0) {
+        const classes: Classroom[] = parsed.classes.map((cls, cIdx) => {
+          const normalizedStudents = Array.isArray(cls.students)
+            ? cls.students.map((s, sIdx) => normalizeStudentRecord(s, sIdx))
+            : [];
+          const validIds = new Set(normalizedStudents.map((s) => s.id));
+          const calledIds = Array.isArray(cls.calledIds)
+            ? cls.calledIds.filter((id) => validIds.has(id))
+            : [];
+          return {
+            id: cls.id || `cls-mig-${cIdx}-${Date.now()}`,
+            name: (cls.name || `Lớp ${cIdx + 1}`).trim(),
+            students: normalizedStudents,
+            calledIds,
+            updatedAt: typeof cls.updatedAt === 'number' ? cls.updatedAt : Date.now(),
+          };
+        });
+        const activeClassId =
+          parsed.activeClassId && classes.some((c) => c.id === parsed.activeClassId)
+            ? parsed.activeClassId
+            : classes[0].id;
+        return { activeClassId, classes };
+      }
+    }
+  } catch {
+    // Ignore parse errors
+  }
+
+  // Migrate legacy single-roster storage seamlessly into first default classroom
+  let migratedStudents: Student[] = DEFAULT_STUDENTS;
+  try {
+    const legacyRaw = localStorage.getItem(LEGACY_STUDENTS_STORAGE_KEY);
+    if (legacyRaw) {
+      const legacyParsed = JSON.parse(legacyRaw) as Partial<Student>[];
+      if (Array.isArray(legacyParsed) && legacyParsed.length > 0) {
+        migratedStudents = buildStudentsWithUniquePresets(
+          legacyParsed.map((item, idx) => {
+            const norm = normalizeStudentRecord(item, idx);
+            return {
+              name: norm.name,
+              gender: norm.gender,
+              existing: norm,
+            };
+          }),
+        );
+      }
+    }
+  } catch {
+    // Fallback to DEFAULT_STUDENTS
+  }
+
+  const initialClass = createClassroomRecord('Lớp của tôi', migratedStudents);
+  return {
+    activeClassId: initialClass.id,
+    classes: [initialClass],
+  };
+}
+
+export function saveClassroomsStore(store: ClassroomsStore) {
+  try {
+    localStorage.setItem(CLASSROOMS_STORAGE_KEY, JSON.stringify(store));
+  } catch {
+    // Ignore quota errors
+  }
+}
 
 export const ROAD_DIALOGUE_SCRIPTS: DialogueScript[] = [
   {

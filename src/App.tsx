@@ -4,6 +4,8 @@ import {
   ChevronDown,
   ChevronUp,
   Clock,
+  CloudFog,
+  CloudRain,
   Minus,
   Play,
   Plus,
@@ -11,6 +13,7 @@ import {
   Shuffle,
   Sparkles,
   Square,
+  Sun,
   UserCheck,
   Users,
   Volume2,
@@ -22,10 +25,12 @@ import { ManualSelectModal } from './components/ManualSelectModal';
 import { StudentListModal } from './components/StudentListModal';
 import { VillageStage } from './components/VillageStage';
 import {
+  ClassroomsStore,
   CLOSING_PROMPT_TEXT,
-  DEFAULT_STUDENTS,
-  normalizeStudentRecord,
+  createClassroomRecord,
+  loadClassroomsStore,
   ROAD_DIALOGUE_SCRIPTS,
+  saveClassroomsStore,
 } from './data/defaultStudents';
 import {
   GamePhase,
@@ -33,11 +38,20 @@ import {
   Student,
   SurpriseEvent,
   SurpriseEventType,
+  WeatherMode,
 } from './types';
 import { audioEngine } from './utils/audioEngine';
 
-const STORAGE_KEY = 'den_truong_thoi_nao_students_v2';
 const TIME_OPTIONS = [10, 15, 20, 30, 45, 60] as const;
+
+const WEATHER_OPTIONS: {
+  id: WeatherMode;
+  label: string;
+}[] = [
+  { id: 'sunny', label: 'Nắng' },
+  { id: 'light_rain', label: 'Mưa nhẹ' },
+  { id: 'foggy', label: 'Sương mù' },
+];
 
 const SURPRISE_TEMPLATES: {
   type: SurpriseEventType;
@@ -47,49 +61,40 @@ const SURPRISE_TEMPLATES: {
   {
     type: 'teacher_greet',
     title: 'Các bạn nhỏ dừng lại chào thầy/cô!',
-    description: 'Một vài bạn bất ngờ nhận ra thầy/cô, dừng bước lễ phép cúi chào và vẫy tay thật tươi!',
+    description:
+      'Một vài bạn bất ngờ nhận ra thầy/cô, dừng bước lễ phép cúi chào và vẫy tay thật tươi!',
   },
   {
     type: 'butterfly_swarm',
     title: 'Bất ngờ! Đàn bướm rực rỡ bay ùa ra!',
-    description: 'Cả đàn bướm sặc sỡ bay lượn quanh đường làm các bạn thích thú ngắm nhìn!',
+    description:
+      'Cả đàn bướm sặc sỡ bay lượn quanh đường làm các bạn thích thú ngắm nhìn!',
   },
   {
     type: 'wind_petals',
     title: 'Cơn gió núi thổi bay cánh hoa rừng!',
-    description: 'Những cánh hoa dã quỳ và hoa sim bay nhẹ khắp con đường đến trường!',
+    description:
+      'Những cánh hoa dã quỳ và hoa sim bay nhẹ khắp con đường đến trường!',
   },
   {
     type: 'giant_flower_find',
     title: 'Ồ! Phát hiện khóm hoa dã quỳ siêu to!',
-    description: 'Một bạn bất ngờ dừng lại trầm trồ trước khóm hoa nở rộ bên đường!',
+    description:
+      'Một bạn bất ngờ dừng lại trầm trồ trước khóm hoa nở rộ bên đường!',
   },
   {
     type: 'golden_sunbeam',
     title: 'Nắng chiều lấp lánh xuyên qua rặng núi!',
-    description: 'Ánh nắng vàng óng ả bừng sáng khiến cả bản làng lung linh rực rỡ!',
+    description:
+      'Ánh nắng vàng óng ả bừng sáng khiến cả bản làng lung linh rực rỡ!',
   },
   {
     type: 'quick_sprint',
     title: 'Cú nước rút bất ngờ!',
-    description: 'Tiếng chim sơn ca hót vang làm các bạn thi nhau chạy nhanh về cổng trường!',
+    description:
+      'Tiếng chim sơn ca hót vang làm các bạn thi nhau chạy nhanh về cổng trường!',
   },
 ];
-
-function loadSavedStudents(): Student[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw) as Partial<Student>[];
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed.map((item, idx) => normalizeStudentRecord(item, idx));
-      }
-    }
-  } catch {
-    // Ignore storage read errors
-  }
-  return DEFAULT_STUDENTS;
-}
 
 function shufflePick<T>(items: T[], count: number): T[] {
   const copy = [...items];
@@ -101,27 +106,36 @@ function shufflePick<T>(items: T[], count: number): T[] {
 }
 
 export default function App() {
-  const [students, setStudents] = useState<Student[]>(loadSavedStudents);
-  const [calledIds, setCalledIds] = useState<Set<string>>(() => new Set());
+  const [classroomsStore, setClassroomsStore] =
+    useState<ClassroomsStore>(loadClassroomsStore);
   const [pickCount, setPickCount] = useState<number>(1);
   const [selectionMode, setSelectionMode] = useState<SelectionMode>('random');
   const [manualPickedIds, setManualPickedIds] = useState<string[]>([]);
   const [travelSeconds, setTravelSeconds] = useState<number>(15);
   const [secondsLeft, setSecondsLeft] = useState<number>(15);
+  const [weather, setWeather] = useState<WeatherMode>('sunny');
 
   const [phase, setPhase] = useState<GamePhase>('idle');
   const [activeTargetIds, setActiveTargetIds] = useState<string[]>([]);
   const [selectedStudents, setSelectedStudents] = useState<Student[]>([]);
-  const [dialogueSpeakerId, setDialogueSpeakerId] = useState<string | null>(null);
+  const [dialogueSpeakerId, setDialogueSpeakerId] = useState<string | null>(
+    null,
+  );
   const [dialogueText, setDialogueText] = useState<string | null>(null);
 
   const [isMuted, setIsMuted] = useState(false);
   const [isRosterOpen, setIsRosterOpen] = useState(false);
   const [isManualModalOpen, setIsManualModalOpen] = useState(false);
+  const [isShowcaseOpen, setIsShowcaseOpen] = useState(false);
+  const [showcaseInitialMode, setShowcaseInitialMode] = useState<
+    'class' | 'catalog'
+  >('catalog');
   const [showcaseStudent, setShowcaseStudent] = useState<Student | null>(null);
   const [isDockCollapsed, setIsDockCollapsed] = useState(false);
   const [roundNotice, setRoundNotice] = useState<string | null>(null);
-  const [activeSurprise, setActiveSurprise] = useState<SurpriseEvent | null>(null);
+  const [activeSurprise, setActiveSurprise] = useState<SurpriseEvent | null>(
+    null,
+  );
 
   const countdownTimerRef = useRef<number | null>(null);
   const closingTimerRef = useRef<number | null>(null);
@@ -129,24 +143,34 @@ export default function App() {
   const surpriseTimersRef = useRef<number[]>([]);
   const scriptIndexRef = useRef(0);
   const pendingTargetsRef = useRef<Student[]>([]);
+  const activeClassIdRef = useRef<string>(classroomsStore.activeClassId);
+
+  const activeClassroom = useMemo(
+    () =>
+      classroomsStore.classes.find(
+        (c) => c.id === classroomsStore.activeClassId,
+      ) ?? classroomsStore.classes[0],
+    [classroomsStore],
+  );
+
+  const students = activeClassroom.students;
+  const calledIds = useMemo(
+    () => new Set(activeClassroom.calledIds),
+    [activeClassroom.calledIds],
+  );
 
   useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(students));
-    } catch {
-      // Ignore storage write errors
-    }
-  }, [students]);
+    activeClassIdRef.current = activeClassroom.id;
+  }, [activeClassroom.id]);
 
+  // Persist classrooms store to localStorage automatically
+  useEffect(() => {
+    saveClassroomsStore(classroomsStore);
+  }, [classroomsStore]);
+
+  // Keep manual picks & pick count in sync with current class students
   useEffect(() => {
     const validIds = new Set(students.map((s) => s.id));
-    setCalledIds((prev) => {
-      const next = new Set<string>();
-      prev.forEach((id) => {
-        if (validIds.has(id)) next.add(id);
-      });
-      return next;
-    });
     setManualPickedIds((prev) => prev.filter((id) => validIds.has(id)));
     setPickCount((prev) =>
       Math.max(1, Math.min(prev, Math.max(1, students.length))),
@@ -156,6 +180,24 @@ export default function App() {
   const remainingStudents = useMemo(
     () => students.filter((s) => !calledIds.has(s.id)),
     [students, calledIds],
+  );
+
+  const updateClassCalledIds = useCallback(
+    (classId: string, updater: (prev: string[]) => string[]) => {
+      setClassroomsStore((prev) => ({
+        ...prev,
+        classes: prev.classes.map((cls) =>
+          cls.id === classId
+            ? {
+                ...cls,
+                calledIds: updater(cls.calledIds),
+                updatedAt: Date.now(),
+              }
+            : cls,
+        ),
+      }));
+    },
+    [],
   );
 
   const clearActivityTimers = useCallback(() => {
@@ -200,8 +242,9 @@ export default function App() {
 
     let cancelled = false;
     let currentLines =
-      ROAD_DIALOGUE_SCRIPTS[scriptIndexRef.current % ROAD_DIALOGUE_SCRIPTS.length]
-        .lines;
+      ROAD_DIALOGUE_SCRIPTS[
+        scriptIndexRef.current % ROAD_DIALOGUE_SCRIPTS.length
+      ].lines;
     scriptIndexRef.current++;
     let lineIdx = 0;
 
@@ -247,6 +290,106 @@ export default function App() {
     };
   }, [phase, students]);
 
+  const handleStopToIdle = useCallback(() => {
+    clearActivityTimers();
+    audioEngine.stopAmbientLoop();
+    audioEngine.stopBackgroundMusic();
+    setSelectedStudents([]);
+    setActiveTargetIds([]);
+    setSecondsLeft(travelSeconds);
+    setPhase('idle');
+  }, [clearActivityTimers, travelSeconds]);
+
+  const handleSelectClass = useCallback(
+    (classId: string) => {
+      if (classId === activeClassroom.id) return;
+      handleStopToIdle();
+      setManualPickedIds([]);
+      setRoundNotice(null);
+      setClassroomsStore((prev) => ({
+        ...prev,
+        activeClassId: classId,
+      }));
+    },
+    [activeClassroom.id, handleStopToIdle],
+  );
+
+  const handleCreateClass = useCallback(
+    (name: string) => {
+      handleStopToIdle();
+      setManualPickedIds([]);
+      setRoundNotice(null);
+      const created = createClassroomRecord(name, []);
+      setClassroomsStore((prev) => ({
+        activeClassId: created.id,
+        classes: [...prev.classes, created],
+      }));
+    },
+    [handleStopToIdle],
+  );
+
+  const handleRenameClass = useCallback((classId: string, newName: string) => {
+    const trimmed = newName.trim();
+    if (!trimmed) return;
+    setClassroomsStore((prev) => ({
+      ...prev,
+      classes: prev.classes.map((cls) =>
+        cls.id === classId
+          ? { ...cls, name: trimmed, updatedAt: Date.now() }
+          : cls,
+      ),
+    }));
+  }, []);
+
+  const handleDeleteClass = useCallback(
+    (classId: string) => {
+      handleStopToIdle();
+      setManualPickedIds([]);
+      setRoundNotice(null);
+      setClassroomsStore((prev) => {
+        if (prev.classes.length <= 1) return prev;
+        const remaining = prev.classes.filter((c) => c.id !== classId);
+        const nextActiveId =
+          prev.activeClassId === classId ? remaining[0].id : prev.activeClassId;
+        return {
+          activeClassId: nextActiveId,
+          classes: remaining,
+        };
+      });
+    },
+    [handleStopToIdle],
+  );
+
+  const handleSaveClassStudents = useCallback(
+    (classId: string, nextStudents: Student[]) => {
+      const validIds = new Set(nextStudents.map((s) => s.id));
+      let savedClassName = '';
+
+      setClassroomsStore((prev) => ({
+        ...prev,
+        activeClassId: classId,
+        classes: prev.classes.map((cls) => {
+          if (cls.id !== classId) return cls;
+          savedClassName = cls.name;
+          return {
+            ...cls,
+            students: nextStudents,
+            calledIds: cls.calledIds.filter((id) => validIds.has(id)),
+            updatedAt: Date.now(),
+          };
+        }),
+      }));
+
+      handleStopToIdle();
+      if (savedClassName) {
+        setRoundNotice(
+          `Đã lưu lớp “${savedClassName}” (${nextStudents.length} học sinh).`,
+        );
+      }
+    },
+    [handleStopToIdle],
+  );
+
   const handleToggleMute = () => {
     const nextMuted = !isMuted;
     setIsMuted(nextMuted);
@@ -265,18 +408,20 @@ export default function App() {
     audioEngine.stopBackgroundMusic();
     audioEngine.playSchoolBell();
 
+    const targetClassId = activeClassIdRef.current;
+
     closingTimerRef.current = window.setTimeout(() => {
       const winners = pendingTargetsRef.current;
       setSelectedStudents(winners);
-      setCalledIds((prev) => {
-        const next = new Set(prev);
-        winners.forEach((w) => next.add(w.id));
-        return next;
+      updateClassCalledIds(targetClassId, (prev) => {
+        const set = new Set(prev);
+        winners.forEach((w) => set.add(w.id));
+        return Array.from(set);
       });
       setPhase('selected');
       audioEngine.playCelebrationApplause();
     }, 1500);
-  }, [clearActivityTimers]);
+  }, [clearActivityTimers, updateClassCalledIds]);
 
   const startJourneyWithTargets = useCallback(
     (isReRoll = false) => {
@@ -292,7 +437,9 @@ export default function App() {
       let chosen: Student[] = [];
 
       if (selectionMode === 'manual' && !isReRoll) {
-        const manualPool = students.filter((s) => manualPickedIds.includes(s.id));
+        const manualPool = students.filter((s) =>
+          manualPickedIds.includes(s.id),
+        );
         if (manualPool.length === 0) {
           setIsManualModalOpen(true);
           return;
@@ -301,7 +448,7 @@ export default function App() {
       } else {
         let pool = students.filter((s) => !calledIds.has(s.id));
         if (pool.length === 0) {
-          setCalledIds(new Set());
+          updateClassCalledIds(activeClassroom.id, () => []);
           pool = [...students];
           setRoundNotice(
             'Tất cả học sinh đã được gọi — Bắt đầu lượt mới cho cả lớp!',
@@ -318,6 +465,7 @@ export default function App() {
       setActiveTargetIds(chosen.map((c) => c.id));
       setSecondsLeft(travelSeconds);
       setPhase('walking');
+      setIsDockCollapsed(true);
 
       if (!isMuted) {
         audioEngine.startAmbientLoop();
@@ -325,11 +473,18 @@ export default function App() {
         audioEngine.playBirdChirp();
       }
 
-      // Schedule 1-2 surprise situations dynamically during the walk
-      const triggerRandomSurprise = (preferredPool?: typeof SURPRISE_TEMPLATES) => {
-        const pool = preferredPool && preferredPool.length > 0 ? preferredPool : SURPRISE_TEMPLATES;
+      // Schedule 1-3 surprise situations dynamically during the walk
+      const triggerRandomSurprise = (
+        preferredPool?: typeof SURPRISE_TEMPLATES,
+      ) => {
+        const pool =
+          preferredPool && preferredPool.length > 0
+            ? preferredPool
+            : SURPRISE_TEMPLATES;
         const tpl = pool[Math.floor(Math.random() * pool.length)];
-        const onTimePool = students.filter((s) => !chosen.some((c) => c.id === s.id));
+        const onTimePool = students.filter(
+          (s) => !chosen.some((c) => c.id === s.id),
+        );
         const affected =
           tpl.type === 'quick_sprint' && onTimePool.length > 0
             ? onTimePool[Math.floor(Math.random() * onTimePool.length)]
@@ -393,26 +548,20 @@ export default function App() {
       manualPickedIds,
       pickCount,
       calledIds,
+      activeClassroom.id,
       travelSeconds,
       isMuted,
       clearActivityTimers,
       triggerBellAndCloseGate,
+      updateClassCalledIds,
     ],
   );
 
-  const handleStopToIdle = () => {
-    clearActivityTimers();
-    audioEngine.stopAmbientLoop();
-    audioEngine.stopBackgroundMusic();
-    setSelectedStudents([]);
-    setActiveTargetIds([]);
-    setSecondsLeft(travelSeconds);
-    setPhase('idle');
-  };
-
   const handleResetRound = () => {
-    setCalledIds(new Set());
-    setRoundNotice('Đã làm mới danh sách gọi cho lượt chơi mới.');
+    updateClassCalledIds(activeClassroom.id, () => []);
+    setRoundNotice(
+      `Đã làm mới danh sách gọi cho lớp “${activeClassroom.name}”.`,
+    );
   };
 
   const handleModeChange = (mode: SelectionMode) => {
@@ -426,6 +575,17 @@ export default function App() {
     }
   };
 
+  const openStudentShowcase = (stu: Student) => {
+    setShowcaseStudent(stu);
+    setShowcaseInitialMode('class');
+    setIsShowcaseOpen(true);
+  };
+
+  const openCatalogShowcase = () => {
+    setShowcaseInitialMode('catalog');
+    setIsShowcaseOpen(true);
+  };
+
   const lateHeadline = useMemo(() => {
     if (selectedStudents.length === 0) return '';
     if (selectedStudents.length === 1) {
@@ -436,8 +596,7 @@ export default function App() {
       .map((s) => `bạn ${s.name}`)
       .join(', ');
     const last = selectedStudents[selectedStudents.length - 1].name;
-    const joined =
-      allButLast.charAt(0).toUpperCase() + allButLast.slice(1);
+    const joined = allButLast.charAt(0).toUpperCase() + allButLast.slice(1);
     return `${joined} và bạn ${last} đến trễ vì mải hái hoa, bắt bướm!`;
   }, [selectedStudents]);
 
@@ -447,7 +606,6 @@ export default function App() {
       (t) => t.type !== activeSurprise?.type,
     );
     const teacherGreetTpl = SURPRISE_TEMPLATES[0];
-    // 50% prioritize teacher_greet on manual trigger, or cycle other surprises while still greeting teacher
     const tpl =
       activeSurprise?.type !== 'teacher_greet' && Math.random() < 0.5
         ? teacherGreetTpl
@@ -459,12 +617,14 @@ export default function App() {
     const affected =
       tpl.type === 'quick_sprint' && onTimePool.length > 0
         ? onTimePool[Math.floor(Math.random() * onTimePool.length)]
-        : targetPool[Math.floor(Math.random() * targetPool.length)] || students[0];
+        : targetPool[Math.floor(Math.random() * targetPool.length)] ||
+          students[0];
 
-    // Pick 1..3 students randomly to pause on the road & bow/wave warmly at the teacher
     const greetCount = Math.min(
       students.length,
-      tpl.type === 'teacher_greet' ? 2 + Math.floor(Math.random() * 2) : 1 + Math.floor(Math.random() * 2),
+      tpl.type === 'teacher_greet'
+        ? 2 + Math.floor(Math.random() * 2)
+        : 1 + Math.floor(Math.random() * 2),
     );
     const shuffled = shufflePick(students, greetCount);
     const greetStudentIds = shuffled.map((s) => s.id);
@@ -513,22 +673,45 @@ export default function App() {
         dialogueSpeakerId={dialogueSpeakerId}
         dialogueText={dialogueText}
         activeSurprise={activeSurprise}
-        onInspectStudent={(stu) => setShowcaseStudent(stu)}
+        weather={weather}
+        onInspectStudent={openStudentShowcase}
       />
 
       {/* Top Navigation Bar */}
-      <header className="fixed top-0 inset-x-0 z-30 px-4 sm:px-6 py-3 pointer-events-none">
-        <div className="mx-auto max-w-7xl flex items-center justify-between gap-4 sm:gap-6 bg-white/95 border border-stone-200 shadow-md rounded-2xl px-4 sm:px-6 py-2.5 pointer-events-auto">
-          <h1 className="text-lg sm:text-xl font-extrabold tracking-tight text-stone-900 whitespace-nowrap shrink-0">
-            Đến Trường Thôi Nào!
-          </h1>
+      <header className="fixed top-0 inset-x-0 z-30 px-3 sm:px-6 py-3 pointer-events-none">
+        <div className="mx-auto max-w-7xl flex items-center justify-between gap-3 sm:gap-5 bg-white/95 border border-stone-200 shadow-md rounded-2xl px-4 sm:px-5 py-2.5 pointer-events-auto">
+          <div className="flex items-center gap-3 min-w-0">
+            <h1 className="font-display text-base sm:text-xl font-extrabold tracking-tight text-stone-900 whitespace-nowrap shrink-0">
+              Đến Trường Thôi Nào!
+            </h1>
 
-          <div className="hidden lg:flex items-center gap-3 text-sm font-medium text-stone-600 truncate">
-            <span className="font-bold text-red-700">
+            {/* Direct Class Selector */}
+            <div className="flex items-center gap-2 min-w-0">
+              <label htmlFor="active-class-select" className="sr-only">
+                Chọn lớp học
+              </label>
+              <select
+                id="active-class-select"
+                value={activeClassroom.id}
+                onChange={(e) => handleSelectClass(e.target.value)}
+                disabled={phase === 'walking' || phase === 'closing'}
+                className="h-9 max-w-[175px] sm:max-w-[210px] px-2.5 rounded-xl border border-stone-200 bg-stone-50 hover:bg-stone-100 text-stone-900 font-bold text-xs sm:text-sm truncate cursor-pointer focus:outline-none focus:ring-2 focus:ring-amber-500 disabled:opacity-50"
+              >
+                {classroomsStore.classes.map((cls) => (
+                  <option key={cls.id} value={cls.id}>
+                    {cls.name} ({cls.students.length} em)
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="hidden xl:flex items-center gap-2.5 text-sm font-medium text-stone-600 truncate">
+            <span className="font-bold text-red-700 whitespace-nowrap">
               Trường PTDTBT TH&amp;THCS Lý Tự Trọng
             </span>
             <span aria-hidden="true">·</span>
-            <span className="tabular-nums text-stone-800 font-semibold">
+            <span className="tabular-nums text-stone-800 font-semibold whitespace-nowrap">
               Còn {remainingStudents.length}/{students.length} bạn chưa gọi
             </span>
           </div>
@@ -545,31 +728,27 @@ export default function App() {
               ) : (
                 <Volume2 className="w-4 h-4 text-emerald-700" />
               )}
-              <span className="hidden sm:inline">
+              <span className="hidden md:inline">
                 {isMuted ? 'Tắt tiếng' : 'Nhạc & Chuông'}
               </span>
             </button>
 
-            {students.length > 0 && (
-              <button
-                type="button"
-                onClick={() =>
-                  setShowcaseStudent(selectedStudents[0] || students[0])
-                }
-                className="h-10 px-3.5 rounded-xl border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-800 font-semibold text-xs sm:text-sm flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-colors cursor-pointer"
-              >
-                <Sparkles className="w-4 h-4" />
-                <span className="hidden sm:inline">Xem Chibi</span>
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={openCatalogShowcase}
+              className="h-10 px-3.5 rounded-xl border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-800 font-semibold text-xs sm:text-sm flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-colors cursor-pointer"
+            >
+              <Sparkles className="w-4 h-4" />
+              <span className="hidden sm:inline">30 Chibi</span>
+            </button>
 
             <button
               type="button"
               onClick={() => setIsRosterOpen(true)}
-              className="h-10 px-4 rounded-xl bg-stone-900 hover:bg-stone-800 text-white font-semibold text-xs sm:text-sm flex items-center gap-2 whitespace-nowrap shrink-0 transition-colors cursor-pointer"
+              className="h-10 px-3.5 sm:px-4 rounded-xl bg-stone-900 hover:bg-stone-800 text-white font-semibold text-xs sm:text-sm flex items-center gap-2 whitespace-nowrap shrink-0 transition-colors cursor-pointer"
             >
               <Users className="w-4 h-4" />
-              <span>DANH SÁCH HỌC SINH</span>
+              <span>Lớp &amp; Danh sách</span>
             </button>
           </div>
         </div>
@@ -579,6 +758,25 @@ export default function App() {
       {roundNotice && (
         <div className="fixed top-20 left-1/2 -translate-x-1/2 z-30 px-5 py-2 rounded-xl bg-amber-100 border border-amber-300 text-amber-950 text-sm font-semibold shadow-md whitespace-nowrap">
           {roundNotice}
+        </div>
+      )}
+
+      {/* Empty Class Callout (when teacher creates a fresh class before importing names) */}
+      {phase === 'idle' && students.length === 0 && (
+        <div className="fixed top-24 left-1/2 -translate-x-1/2 z-30 px-6 py-4 rounded-2xl bg-white/95 border-2 border-amber-400 shadow-xl text-center max-w-md space-y-2.5">
+          <p className="font-display text-base sm:text-lg font-extrabold text-stone-900">
+            Lớp “{activeClassroom.name}” chưa có học sinh
+          </p>
+          <p className="text-xs sm:text-sm text-stone-600">
+            Nhấn nút bên dưới để dán danh sách cả lớp, tự nhận diện Nam/Nữ và hiện các bạn nhỏ Ca Dong lên đường đến trường.
+          </p>
+          <button
+            type="button"
+            onClick={() => setIsRosterOpen(true)}
+            className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm cursor-pointer whitespace-nowrap"
+          >
+            Nhập nhanh danh sách lớp
+          </button>
         </div>
       )}
 
@@ -638,8 +836,8 @@ export default function App() {
                 <button
                   key={stu.id}
                   type="button"
-                  onClick={() => setShowcaseStudent(stu)}
-                  title="Nhấn để xem toàn thân Chibi & 7 biểu cảm"
+                  onClick={() => openStudentShowcase(stu)}
+                  title="Nhấn để xem toàn thân Chibi, 6 tư thế & 7 biểu cảm"
                   className="flex items-center gap-3 px-4 py-2 rounded-2xl bg-amber-100 hover:bg-amber-200/80 border border-amber-300 shadow-sm transition-colors cursor-pointer"
                 >
                   {stu.avatarUrl ? (
@@ -670,27 +868,73 @@ export default function App() {
       )}
 
       {/* Collapsible Bottom Control Dock */}
-      <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-30 flex flex-col items-center max-w-[96vw]">
-        <button
-          type="button"
-          onClick={() => setIsDockCollapsed((v) => !v)}
-          className="mb-1.5 px-3.5 py-1 rounded-t-xl bg-white/95 border border-b-0 border-stone-200 text-xs font-semibold text-stone-600 hover:text-stone-900 flex items-center gap-1.5 shadow-sm cursor-pointer"
-        >
-          {isDockCollapsed ? (
+      <div className="fixed bottom-3 left-1/2 -translate-x-1/2 z-30 flex flex-col items-center max-w-[96vw]">
+        <div className="flex items-center gap-1.5 mb-1.5">
+          {isDockCollapsed && phase === 'walking' && (
             <>
-              <ChevronUp className="w-3.5 h-3.5" />
-              <span>Mở bảng điều khiển</span>
-            </>
-          ) : (
-            <>
-              <ChevronDown className="w-3.5 h-3.5" />
-              <span>Thu gọn</span>
+              <button
+                type="button"
+                onClick={triggerManualSurprise}
+                className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-stone-950 font-display font-bold text-xs flex items-center gap-1.5 shadow-md whitespace-nowrap cursor-pointer transition-colors"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Tình huống bất ngờ</span>
+              </button>
+              <button
+                type="button"
+                onClick={triggerBellAndCloseGate}
+                className="px-3 py-1.5 rounded-xl bg-red-600 hover:bg-red-700 text-white font-display font-bold text-xs flex items-center gap-1.5 shadow-md whitespace-nowrap cursor-pointer transition-colors"
+              >
+                <BellRing className="w-3.5 h-3.5" />
+                <span>Đóng cổng</span>
+              </button>
             </>
           )}
-        </button>
+
+          {isDockCollapsed && phase === 'selected' && (
+            <>
+              <button
+                type="button"
+                onClick={() => startJourneyWithTargets(true)}
+                className="px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-display font-bold text-xs flex items-center gap-1.5 shadow-md whitespace-nowrap cursor-pointer transition-colors"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Chọn lại</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => startJourneyWithTargets(false)}
+                className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-display font-bold text-xs flex items-center gap-1.5 shadow-md whitespace-nowrap cursor-pointer transition-colors"
+              >
+                <Play className="w-3.5 h-3.5 fill-current" />
+                <span>Tiếp tục</span>
+              </button>
+            </>
+          )}
+
+          <button
+            type="button"
+            onClick={() => setIsDockCollapsed((v) => !v)}
+            className={`px-3.5 py-1.5 bg-white/95 border border-stone-200 text-xs font-semibold text-stone-700 hover:text-stone-950 flex items-center gap-1.5 shadow-sm cursor-pointer whitespace-nowrap ${
+              isDockCollapsed ? 'rounded-xl' : 'rounded-t-xl border-b-0 -mb-1.5'
+            }`}
+          >
+            {isDockCollapsed ? (
+              <>
+                <ChevronUp className="w-3.5 h-3.5" />
+                <span>Mở bảng điều khiển</span>
+              </>
+            ) : (
+              <>
+                <ChevronDown className="w-3.5 h-3.5" />
+                <span>Thu gọn</span>
+              </>
+            )}
+          </button>
+        </div>
 
         {!isDockCollapsed && (
-          <div className="bg-white/95 border border-stone-200 shadow-xl rounded-2xl px-3 sm:px-5 py-3 flex flex-wrap items-center justify-center gap-2.5 sm:gap-3.5">
+          <div className="bg-white/95 border border-stone-200 shadow-xl rounded-2xl px-3 sm:px-5 py-3 flex flex-wrap items-center justify-center gap-2.5 sm:gap-3">
             {/* 1. Flexible Late Student Count Stepper (1 .. class size) */}
             <div
               className="flex items-center gap-1.5 px-2 py-1 bg-stone-100 rounded-xl border border-stone-200"
@@ -813,7 +1057,42 @@ export default function App() {
               ))}
             </div>
 
-            {/* 4. Primary Action Buttons */}
+            {/* 4. Weather Selector (Nắng / Mưa nhẹ / Sương mù) */}
+            <div
+              className="flex items-center gap-1 p-1 bg-stone-100 rounded-xl border border-stone-200"
+              role="group"
+              aria-label="Thời tiết trên đường đến trường"
+            >
+              <span className="px-2 text-xs font-semibold text-stone-500 hidden sm:inline whitespace-nowrap">
+                Thời tiết:
+              </span>
+              {WEATHER_OPTIONS.map((opt) => {
+                const active = weather === opt.id;
+                return (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => setWeather(opt.id)}
+                    className={`px-2.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-colors cursor-pointer ${
+                      active
+                        ? opt.id === 'sunny'
+                          ? 'bg-amber-400 text-stone-950 shadow-sm'
+                          : opt.id === 'light_rain'
+                            ? 'bg-sky-600 text-white shadow-sm'
+                            : 'bg-slate-600 text-white shadow-sm'
+                        : 'text-stone-700 hover:text-stone-950'
+                    }`}
+                  >
+                    {opt.id === 'sunny' && <Sun className="w-3.5 h-3.5" />}
+                    {opt.id === 'light_rain' && <CloudRain className="w-3.5 h-3.5" />}
+                    {opt.id === 'foggy' && <CloudFog className="w-3.5 h-3.5" />}
+                    <span>{opt.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* 5. Primary Action Buttons */}
             {phase === 'idle' && (
               <button
                 type="button"
@@ -888,18 +1167,17 @@ export default function App() {
         )}
       </div>
 
-      {/* Student Roster & Photo Upload Modal */}
+      {/* Multi-Class Roster & Quick Bulk Import Modal */}
       <StudentListModal
         isOpen={isRosterOpen}
         onClose={() => setIsRosterOpen(false)}
-        students={students}
-        calledIds={calledIds}
-        onUpdateStudents={(next, shouldResetToIdle) => {
-          setStudents(next);
-          if (shouldResetToIdle && phase !== 'idle') {
-            handleStopToIdle();
-          }
-        }}
+        classrooms={classroomsStore.classes}
+        activeClassId={activeClassroom.id}
+        onSelectClass={handleSelectClass}
+        onCreateClass={handleCreateClass}
+        onRenameClass={handleRenameClass}
+        onDeleteClass={handleDeleteClass}
+        onSaveClassStudents={handleSaveClassStudents}
         onResetRound={handleResetRound}
       />
 
@@ -913,12 +1191,14 @@ export default function App() {
         onChangeSelectedIds={setManualPickedIds}
       />
 
-      {/* Full-Body Pastel Ca Dong Chibi Character & 7 Expressions Showcase */}
+      {/* 30 Ca Dong Chibi Character Gallery & Interactive Pose/Expression Showcase */}
       <ChibiShowcaseModal
+        isOpen={isShowcaseOpen}
+        initialMode={showcaseInitialMode}
         student={showcaseStudent}
         students={students}
         onSelectStudent={setShowcaseStudent}
-        onClose={() => setShowcaseStudent(null)}
+        onClose={() => setIsShowcaseOpen(false)}
       />
     </div>
   );

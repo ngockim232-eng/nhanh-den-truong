@@ -5,6 +5,7 @@ import {
   GamePhase,
   Student,
   SurpriseEvent,
+  WeatherMode,
 } from '../types';
 import { ChibiCharacterSVG } from './ChibiCharacterSVG';
 import {
@@ -22,6 +23,7 @@ interface VillageStageProps {
   dialogueSpeakerId: string | null;
   dialogueText: string | null;
   activeSurprise?: SurpriseEvent | null;
+  weather?: WeatherMode;
   onInspectStudent?: (student: Student) => void;
 }
 
@@ -87,27 +89,27 @@ const BUTTERFLY_KINDS: ButterflyKind[] = [
   'rosewing',
 ];
 
-// Smooth, visibly winding S-curve centerline X% from school gate (y=34%) to foreground (y=96%)
+// Smooth, extended winding S-curve centerline X% from school gate (y=30.5%) to foreground (y=99%)
 function roadCenterX(yPct: number): number {
-  const s = Math.max(0, Math.min(1, (yPct - 34) / (96 - 34)));
-  const envelope = Math.sin(s * Math.PI * 0.92);
-  return 50 - Math.sin(s * Math.PI * 2.2) * 14.5 * (0.35 + 0.65 * envelope);
+  const s = Math.max(0, Math.min(1, (yPct - 30.5) / (99 - 30.5)));
+  const envelope = Math.sin(s * Math.PI * 0.94);
+  return 50 - Math.sin(s * Math.PI * 2.55) * 16.5 * (0.32 + 0.68 * envelope);
 }
 
 // Perspective road half-width in % (narrower at distant gate, wider at foreground)
 function roadHalfWidthPct(yPct: number): number {
-  const s = Math.max(0, Math.min(1, (yPct - 34) / (96 - 34)));
-  return 5.5 + Math.pow(s, 1.32) * 19.5;
+  const s = Math.max(0, Math.min(1, (yPct - 30.5) / (99 - 30.5)));
+  return 4.8 + Math.pow(s, 1.35) * 20.5;
 }
 
 // Build a smooth SVG quadratic-spline path matching roadCenterX(y) in 1600x900 viewBox
 function buildWindingRoadPath(
   widthScale: number,
   extraPct: number,
-  yStart = 34,
-  yEnd = 102,
+  yStart = 30.5,
+  yEnd = 104,
 ): string {
-  const steps = 24;
+  const steps = 30;
   const leftPts: [number, number][] = [];
   const rightPts: [number, number][] = [];
 
@@ -146,25 +148,25 @@ const ROAD_SHOULDER_PATH = buildWindingRoadPath(1.06, 1.4);
 const ROAD_MAIN_PATH = buildWindingRoadPath(1.0, 0);
 const ROAD_HIGHLIGHT_PATH = buildWindingRoadPath(0.56, 0);
 
-const ROAD_PEBBLES = [39, 45, 51.5, 58.5, 66, 74, 82.5, 90].map((yPct, idx) => {
-  const s = (yPct - 34) / (96 - 34);
+const ROAD_PEBBLES = [34.5, 40, 46, 52.5, 59, 66, 73.5, 81, 88.5, 95].map((yPct, idx) => {
+  const s = (yPct - 30.5) / (99 - 30.5);
   const cx = ((roadCenterX(yPct) + (idx % 2 === 0 ? -1.4 : 1.6)) / 100) * 1600;
   const cy = (yPct / 100) * 900;
-  const w = 22 + s * 48;
-  const h = 5 + s * 11;
+  const w = 18 + s * 50;
+  const h = 4.5 + s * 11.5;
   return { cx, cy, w, h, rot: (idx % 2 === 0 ? -1 : 1) * (4 + (idx % 3) * 3) };
 });
 
-// Roadside wildflowers hugging the curved left & right banks of the winding road
+// Roadside wildflowers hugging the curved left & right banks of the extended winding road
 const ROADSIDE_FLOWERS: FlowerSpot[] = [
-  43, 47, 51, 55, 59, 63, 67, 71, 75, 79, 84, 89,
+  37, 41, 45, 49, 53.5, 58, 62.5, 67, 71.5, 76, 81, 86, 91, 96,
 ].flatMap((yPct, idx) => {
   const cx = roadCenterX(yPct);
   const hw = roadHalfWidthPct(yPct);
-  const s = Math.max(0, Math.min(1, (yPct - 34) / (96 - 34)));
-  const scale = 0.48 + Math.pow(s, 1.15) * 0.78;
-  const leftX = Math.max(3, cx - hw - 3.5 - (idx % 2) * 3.5);
-  const rightX = Math.min(97, cx + hw + 3.5 + ((idx + 1) % 2) * 3.5);
+  const s = Math.max(0, Math.min(1, (yPct - 30.5) / (99 - 30.5)));
+  const scale = 0.42 + Math.pow(s, 1.15) * 0.84;
+  const leftX = Math.max(3, cx - hw - 3.2 - (idx % 2) * 3.2);
+  const rightX = Math.min(97, cx + hw + 3.2 + ((idx + 1) % 2) * 3.2);
   return [
     {
       id: `fl-l-${idx}`,
@@ -248,6 +250,41 @@ const SUN_SPARKLES: SunSparkleSpec[] = Array.from({ length: 28 }).map(
   }),
 );
 
+// Subtle highland light rain streaks & road puddle ripples
+const RAIN_STREAKS = Array.from({ length: 64 }).map((_, idx) => ({
+  id: `rain-${idx}`,
+  startX: ((idx * 17.3) % 116) - 8,
+  startY: (idx * 23.7) % 100,
+  speedY: 76 + (idx % 5) * 14,
+  lengthPx: 14 + (idx % 4) * 5,
+  opacity: 0.28 + (idx % 4) * 0.11,
+  widthPx: idx % 3 === 0 ? 1.5 : 1.1,
+}));
+
+const RAIN_RIPPLES = [40, 47, 54, 61, 68, 75, 82, 88, 94].map((yPct, idx) => {
+  const s = (yPct - 30.5) / (99 - 30.5);
+  const offset = (idx % 3 - 1) * roadHalfWidthPct(yPct) * 0.42;
+  return {
+    id: `rip-${idx}`,
+    xPct: roadCenterX(yPct) + offset,
+    yPct,
+    maxRx: 10 + s * 18,
+    maxRy: 3 + s * 5.5,
+    period: 1.55 + (idx % 4) * 0.28,
+    phase: idx * 0.41,
+  };
+});
+
+// Layered drifting highland morning fog ribbons
+const FOG_BANDS = [
+  { id: 'fog-far-1', topPct: 16, heightPct: 24, widthPct: 150, speed: 1.15, phase: 0.2, opacity: 0.56, zIndex: 170 },
+  { id: 'fog-far-2', topPct: 26, heightPct: 22, widthPct: 145, speed: -0.95, phase: 2.1, opacity: 0.48, zIndex: 172 },
+  { id: 'fog-mid-1', topPct: 40, heightPct: 26, widthPct: 155, speed: 1.5, phase: 1.0, opacity: 0.42, zIndex: 260 },
+  { id: 'fog-mid-2', topPct: 54, heightPct: 24, widthPct: 150, speed: -1.3, phase: 3.4, opacity: 0.36, zIndex: 520 },
+  { id: 'fog-near-1', topPct: 68, heightPct: 26, widthPct: 160, speed: 1.85, phase: 0.8, opacity: 0.32, zIndex: 855 },
+  { id: 'fog-near-2', topPct: 80, heightPct: 24, widthPct: 160, speed: -1.65, phase: 2.7, opacity: 0.28, zIndex: 858 },
+];
+
 // Road geometry helpers defined above ROADSIDE_FLOWERS
 
 function lerp(a: number, b: number, t: number): number {
@@ -260,12 +297,12 @@ function seededUnit(seed: number, salt: number): number {
   return x - Math.floor(x);
 }
 
-// Precompute cumulative curve-time LUT from y=90% (foreground) to y=28% (schoolyard)
+// Precompute cumulative curve-time LUT from y=95.5% (foreground) to y=25.5% (schoolyard)
 // Combines S-curve arc length (so horizontal bends don't cause unnatural speed spikes)
 // with 3D perspective foreshortening (faster in foreground, gentler near distant gate).
-const ROAD_LUT_STEPS = 120;
-const ROAD_LUT_Y_MIN = 28;
-const ROAD_LUT_Y_MAX = 90;
+const ROAD_LUT_STEPS = 140;
+const ROAD_LUT_Y_MIN = 25.5;
+const ROAD_LUT_Y_MAX = 95.5;
 
 const ROAD_PACE_LUT: { y: number; cumTime: number }[] = (() => {
   const entries: { y: number; cumTime: number }[] = [];
@@ -342,6 +379,7 @@ export const VillageStage: React.FC<VillageStageProps> = ({
   dialogueSpeakerId,
   dialogueText,
   activeSurprise = null,
+  weather = 'sunny',
   onInspectStudent,
 }) => {
   const [animTime, setAnimTime] = useState(0);
@@ -479,8 +517,8 @@ export const VillageStage: React.FC<VillageStageProps> = ({
           row === totalRows - 1 ? total - row * cols : cols;
         yPct =
           totalRows === 1
-            ? 68
-            : lerp(totalRows >= 3 ? 50 : 55, 73, row / (totalRows - 1));
+            ? 66
+            : lerp(totalRows >= 3 ? 47 : 52, 74, row / (totalRows - 1));
         const maxSpread =
           rowCount <= 1 ? 0 : Math.min(76, Math.max(22, (rowCount - 1) * 16));
         const spread =
@@ -538,8 +576,8 @@ export const VillageStage: React.FC<VillageStageProps> = ({
             0.46,
             0.62 + r1 * 0.24 - sprintBoost,
           );
-          const startY = 85 - (onTimeIdx % 3) * 4.5;
-          const endY = 29 + (onTimeIdx % 2) * 2.5;
+          const startY = 93 - (onTimeIdx % 3) * 3.8;
+          const endY = 26 + (onTimeIdx % 2) * 2.4;
           const hwBaseLane = ((onTimeIdx % 5) - 2) / 2.6;
 
           const hasPlayfulStop = r2 > 0.38;
@@ -557,11 +595,11 @@ export const VillageStage: React.FC<VillageStageProps> = ({
           if (progress >= arriveProgress) {
             const yardSpread =
               onTimeStudents.length > 1
-                ? (onTimeIdx / Math.max(1, onTimeStudents.length - 1) - 0.5) * 40
+                ? (onTimeIdx / Math.max(1, onTimeStudents.length - 1) - 0.5) * 38
                 : 0;
             const sideShift = yardSpread >= 0 ? yardSpread + 3 : yardSpread - 3;
             xPct = 50 + sideShift;
-            yPct = 29 + (onTimeIdx % 2) * 2.8;
+            yPct = 26 + (onTimeIdx % 2) * 2.5;
             action = 'inside_yard';
             expression = 'waving';
             holdingFlower = hasPlayfulStop && stopKind === 'pick_flower';
@@ -650,10 +688,10 @@ export const VillageStage: React.FC<VillageStageProps> = ({
               ? (lateIdx / (lateStudents.length - 1) - 0.5) * 1.85
               : sideSign * 0.95;
 
-          const startY = 85 - (lateIdx % 2) * 3;
-          const midStop1Y = 66 - r4 * 6;
-          const midStop2Y = 53 - r2 * 4;
-          const endWalkY = 47.5;
+          const startY = 93 - (lateIdx % 2) * 3;
+          const midStop1Y = 69 - r4 * 7;
+          const midStop2Y = 52 - r2 * 4.5;
+          const endWalkY = 44.5;
 
           const t1Start = 0.16 + r1 * 0.08;
           const t1End = t1Start + 0.25 + r2 * 0.06;
@@ -791,11 +829,11 @@ export const VillageStage: React.FC<VillageStageProps> = ({
         if (!isLateTarget) {
           const yardSpread =
             onTimeStudents.length > 1
-              ? (onTimeIdx / Math.max(1, onTimeStudents.length - 1) - 0.5) * 40
+              ? (onTimeIdx / Math.max(1, onTimeStudents.length - 1) - 0.5) * 38
               : 0;
           const sideShift = yardSpread >= 0 ? yardSpread + 3 : yardSpread - 3;
           xPct = 50 + sideShift;
-          yPct = 29 + (onTimeIdx % 2) * 2.8;
+          yPct = 26 + (onTimeIdx % 2) * 2.5;
           action = 'inside_yard';
           expression = 'waving';
         } else {
@@ -803,7 +841,7 @@ export const VillageStage: React.FC<VillageStageProps> = ({
             lateStudents.length > 1
               ? (lateIdx / (lateStudents.length - 1) - 0.5) * Math.min(54, lateStudents.length * 14)
               : 0;
-          yPct = 51;
+          yPct = 48;
           xPct = roadCenterX(yPct) + spread;
           action = 'idle';
           expression = 'surprised';
@@ -813,11 +851,11 @@ export const VillageStage: React.FC<VillageStageProps> = ({
         if (!isLateTarget) {
           const yardSpread =
             onTimeStudents.length > 1
-              ? (onTimeIdx / Math.max(1, onTimeStudents.length - 1) - 0.5) * 40
+              ? (onTimeIdx / Math.max(1, onTimeStudents.length - 1) - 0.5) * 38
               : 0;
           const sideShift = yardSpread >= 0 ? yardSpread + 3 : yardSpread - 3;
           xPct = 50 + sideShift;
-          yPct = 29 + (onTimeIdx % 2) * 2.8;
+          yPct = 26 + (onTimeIdx % 2) * 2.5;
           action = 'inside_yard';
           expression = 'waving';
         } else {
@@ -842,13 +880,13 @@ export const VillageStage: React.FC<VillageStageProps> = ({
         }
       }
 
-      // True 3D perspective depth scaling:
-      // Distant students near/inside schoolyard (~48px) -> foreground students (~215px)
-      const depthNorm = Math.max(0, Math.min(1, (yPct - 27) / (90 - 27)));
-      const perspectiveCurve = Math.pow(depthNorm, 1.22);
+      // True 3D perspective depth scaling across the extended road:
+      // Distant students near/inside schoolyard (~45px) -> foreground students (~220px)
+      const depthNorm = Math.max(0, Math.min(1, (yPct - 24) / (95.5 - 24)));
+      const perspectiveCurve = Math.pow(depthNorm, 1.24);
       const baseSize = isHighlighted
         ? 140 + perspectiveCurve * 58
-        : (48 + perspectiveCurve * 164) * countScale;
+        : (45 + perspectiveCurve * 172) * countScale;
       const lateCountScale =
         isHighlighted && lateStudents.length > 2
           ? Math.max(0.74, 1 - (lateStudents.length - 2) * 0.07)
@@ -894,6 +932,9 @@ export const VillageStage: React.FC<VillageStageProps> = ({
   const isWindSurprise = activeSurprise?.type === 'wind_petals';
   const isSunSurprise = activeSurprise?.type === 'golden_sunbeam';
   const isSwarmSurprise = activeSurprise?.type === 'butterfly_swarm';
+  const isLightRain = weather === 'light_rain';
+  const isFoggy = weather === 'foggy';
+  const isSunny = weather === 'sunny';
 
   return (
     <div className="absolute inset-0 z-0 isolate overflow-hidden bg-gradient-to-b from-[#cbe9f9] via-[#e2f3d8] to-[#b9dc95] select-none">
@@ -902,45 +943,60 @@ export const VillageStage: React.FC<VillageStageProps> = ({
         src="/src/assets/images/cadong_village_morning_1795365225340.jpg"
         alt="Bản làng vùng cao Ca Dong buổi sáng sớm"
         referrerPolicy="no-referrer"
-        className="absolute inset-0 w-full h-full object-cover object-center pointer-events-none"
-      />
-
-      {/* 2. Dynamic Golden Sunlight & Shimmering Afternoon Sunbeams Layer */}
-      <div
-        className="absolute inset-0 pointer-events-none transition-opacity duration-700"
+        className="absolute inset-0 w-full h-full object-cover object-center pointer-events-none transition-all duration-700"
         style={{
-          background: isSunSurprise
-            ? 'radial-gradient(circle at 80% 14%, rgba(255, 240, 170, 0.65) 0%, rgba(255, 232, 165, 0.18) 45%, rgba(254, 215, 170, 0.15) 100%)'
-            : 'radial-gradient(circle at 80% 12%, rgba(255, 246, 198, 0.48) 0%, rgba(255, 246, 198, 0) 42%), linear-gradient(180deg, rgba(255,255,255,0.1) 0%, rgba(254, 243, 199, 0.12) 48%, rgba(164, 212, 132, 0.22) 100%)',
+          filter: isLightRain
+            ? 'saturate(0.84) brightness(0.92) contrast(1.03)'
+            : isFoggy
+              ? 'saturate(0.8) brightness(1.04) contrast(0.92)'
+              : 'none',
         }}
       />
 
-      {/* Diagonal Sunbeam Shafts Streaming Across the Village Road */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden="true">
-        {[
-          { left: '46%', width: '16%', opacity: 0.16, phase: 0.0 },
-          { left: '62%', width: '22%', opacity: 0.22, phase: 1.4 },
-          { left: '78%', width: '14%', opacity: 0.15, phase: 2.6 },
-        ].map((ray, i) => {
-          const pulse =
-            (ray.opacity + (isSunSurprise ? 0.16 : 0)) *
-            (0.72 + 0.28 * Math.sin(animTime * 1.1 + ray.phase));
-          return (
-            <div
-              key={i}
-              className="absolute -top-24 h-[145%] origin-top-right"
-              style={{
-                left: ray.left,
-                width: ray.width,
-                transform: 'rotate(24deg)',
-                background:
-                  'linear-gradient(180deg, rgba(255, 249, 210, 0.9) 0%, rgba(254, 240, 138, 0.35) 55%, rgba(254, 240, 138, 0) 100%)',
-                opacity: pulse,
-              }}
-            />
-          );
-        })}
-      </div>
+      {/* 2. Dynamic Weather Atmosphere & Golden Sunlight Layer */}
+      <div
+        className="absolute inset-0 pointer-events-none transition-all duration-700"
+        style={{
+          background: isLightRain
+            ? 'linear-gradient(180deg, rgba(71, 102, 138, 0.34) 0%, rgba(114, 146, 174, 0.2) 45%, rgba(79, 118, 104, 0.18) 100%)'
+            : isFoggy
+              ? 'linear-gradient(180deg, rgba(235, 245, 249, 0.56) 0%, rgba(241, 248, 250, 0.38) 42%, rgba(226, 238, 234, 0.16) 100%)'
+              : isSunSurprise
+                ? 'radial-gradient(circle at 80% 14%, rgba(255, 240, 170, 0.65) 0%, rgba(255, 232, 165, 0.18) 45%, rgba(254, 215, 170, 0.15) 100%)'
+                : 'radial-gradient(circle at 80% 12%, rgba(255, 246, 198, 0.48) 0%, rgba(255, 246, 198, 0) 42%), linear-gradient(180deg, rgba(255,255,255,0.1) 0%, rgba(254, 243, 199, 0.12) 48%, rgba(164, 212, 132, 0.22) 100%)',
+        }}
+      />
+
+      {/* Diagonal Sunbeam Shafts Streaming Across the Village Road (strong in Sunny, soft/diffused in Foggy, faint sun-shower in Rain) */}
+      {(isSunny || isSunSurprise || isFoggy) && (
+        <div className="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden="true">
+          {[
+            { left: '46%', width: '16%', opacity: 0.16, phase: 0.0 },
+            { left: '62%', width: '22%', opacity: 0.22, phase: 1.4 },
+            { left: '78%', width: '14%', opacity: 0.15, phase: 2.6 },
+          ].map((ray, i) => {
+            const weatherFactor = isFoggy && !isSunSurprise ? 0.35 : 1;
+            const pulse =
+              (ray.opacity + (isSunSurprise ? 0.16 : 0)) *
+              weatherFactor *
+              (0.72 + 0.28 * Math.sin(animTime * 1.1 + ray.phase));
+            return (
+              <div
+                key={i}
+                className="absolute -top-24 h-[145%] origin-top-right"
+                style={{
+                  left: ray.left,
+                  width: ray.width,
+                  transform: 'rotate(24deg)',
+                  background:
+                    'linear-gradient(180deg, rgba(255, 249, 210, 0.9) 0%, rgba(254, 240, 138, 0.35) 55%, rgba(254, 240, 138, 0) 100%)',
+                  opacity: pulse,
+                }}
+              />
+            );
+          })}
+        </div>
+      )}
 
       {/* 3. Visibly Serpentine, Softly Feathered S-Curve Highland Path */}
       <svg
@@ -1019,14 +1075,39 @@ export const VillageStage: React.FC<VillageStageProps> = ({
             strokeWidth="1.2"
           />
         ))}
+        {/* Subtle damp sheen & expanding raindrop ripples on the earth path during light rain */}
+        {isLightRain && (
+          <>
+            <path d={ROAD_MAIN_PATH} fill="rgba(148, 179, 206, 0.18)" />
+            {RAIN_RIPPLES.map((rip) => {
+              const cycle = ((animTime + rip.phase) % rip.period) / rip.period;
+              const rx = rip.maxRx * (0.2 + cycle * 0.8);
+              const ry = rip.maxRy * (0.2 + cycle * 0.8);
+              const alpha = (1 - cycle) * 0.52;
+              return (
+                <ellipse
+                  key={rip.id}
+                  cx={(rip.xPct / 100) * 1600}
+                  cy={(rip.yPct / 100) * 900}
+                  rx={rx}
+                  ry={ry}
+                  fill="none"
+                  stroke="#e0f2fe"
+                  strokeWidth="1.5"
+                  opacity={alpha}
+                />
+              );
+            })}
+          </>
+        )}
       </svg>
 
       {/* 4. Expanded Realistic Highland School & Characteristic Wooden Gate: TRƯỜNG PTDTBT TH&THCS LÝ TỰ TRỌNG */}
       <div
         className="absolute left-1/2 -translate-x-1/2 pointer-events-none"
         style={{
-          top: '5.5%',
-          width: 'min(880px, 94vw)',
+          top: '3.2%',
+          width: 'min(810px, 90vw)',
           zIndex: 180,
         }}
       >
@@ -1415,8 +1496,8 @@ export const VillageStage: React.FC<VillageStageProps> = ({
       <div
         className="absolute left-1/2 -translate-x-1/2 pointer-events-none"
         style={{
-          top: '5.5%',
-          width: 'min(880px, 94vw)',
+          top: '3.2%',
+          width: 'min(810px, 90vw)',
           zIndex: 250,
         }}
       >
@@ -1552,8 +1633,8 @@ export const VillageStage: React.FC<VillageStageProps> = ({
 
       {/* 7. Realistic Botanical Wildflower Clusters Along the Wide Road Shoulders */}
       {ROADSIDE_FLOWERS.map((fl) => {
-        const swayAmp = isWindSurprise ? 11 : 4.5;
-        const swaySpeed = isWindSurprise ? 4.2 : 1.9;
+        const swayAmp = isWindSurprise ? 11 : isLightRain ? 6.5 : isFoggy ? 2.6 : 4.5;
+        const swaySpeed = isWindSurprise ? 4.2 : isLightRain ? 2.6 : isFoggy ? 1.2 : 1.9;
         const sway = Math.sin(animTime * swaySpeed + fl.phaseOffset) * swayAmp;
         return (
           <div
@@ -1781,35 +1862,91 @@ export const VillageStage: React.FC<VillageStageProps> = ({
       </div>
 
       {/* 11. Dynamic Atmospheric Layer: Twinkling Golden Sun Motes (Nắng chiều lấp lánh) */}
-      <div className="absolute inset-0 pointer-events-none overflow-hidden" style={{ zIndex: 870 }}>
-        {SUN_SPARKLES.filter((s) => !s.extraOnly || isSunSurprise).map((s) => {
-          const driftY = s.y + Math.sin(animTime * 0.7 + s.phase) * 2.5;
-          const driftX = s.x + Math.cos(animTime * 0.55 + s.phase) * 2.2;
-          const glow = 0.25 + 0.75 * Math.pow(Math.max(0, Math.sin(animTime * s.speed + s.phase)), 2);
-          const scale = (isSunSurprise ? 1.3 : 1) * (0.65 + 0.45 * glow);
+      {(isSunny || isSunSurprise) && (
+        <div className="absolute inset-0 pointer-events-none overflow-hidden" style={{ zIndex: 870 }}>
+          {SUN_SPARKLES.filter((s) => !s.extraOnly || isSunSurprise).map((s) => {
+            const driftY = s.y + Math.sin(animTime * 0.7 + s.phase) * 2.5;
+            const driftX = s.x + Math.cos(animTime * 0.55 + s.phase) * 2.2;
+            const glow = 0.25 + 0.75 * Math.pow(Math.max(0, Math.sin(animTime * s.speed + s.phase)), 2);
+            const scale = (isSunSurprise ? 1.3 : 1) * (0.65 + 0.45 * glow);
 
-          return (
-            <svg
-              key={s.id}
-              viewBox="0 0 24 24"
-              className="absolute"
-              style={{
-                left: `${driftX}%`,
-                top: `${driftY}%`,
-                width: `${s.size}px`,
-                height: `${s.size}px`,
-                opacity: glow * (isSunSurprise ? 0.95 : 0.72),
-                transform: `scale(${scale})`,
-              }}
-            >
-              <path
-                d="M12 1 L14.3 9.7 L23 12 L14.3 14.3 L12 23 L9.7 14.3 L1 12 L9.7 9.7 Z"
-                fill="#fef9c3"
+            return (
+              <svg
+                key={s.id}
+                viewBox="0 0 24 24"
+                className="absolute"
+                style={{
+                  left: `${driftX}%`,
+                  top: `${driftY}%`,
+                  width: `${s.size}px`,
+                  height: `${s.size}px`,
+                  opacity: glow * (isSunSurprise ? 0.95 : 0.72),
+                  transform: `scale(${scale})`,
+                }}
+              >
+                <path
+                  d="M12 1 L14.3 9.7 L23 12 L14.3 14.3 L12 23 L9.7 14.3 L1 12 L9.7 9.7 Z"
+                  fill="#fef9c3"
+                />
+              </svg>
+            );
+          })}
+        </div>
+      )}
+
+      {/* 12. Weather Overlay: Subtle Slanted Highland Light Rain (Mưa nhẹ) */}
+      {isLightRain && (
+        <div
+          className="absolute inset-0 pointer-events-none overflow-hidden"
+          style={{ zIndex: 875 }}
+          aria-hidden="true"
+        >
+          {RAIN_STREAKS.map((drop) => {
+            const y = ((drop.startY + animTime * drop.speedY) % 112) - 6;
+            const x = ((drop.startX - animTime * drop.speedY * 0.16) % 116 + 116) % 116 - 8;
+            return (
+              <div
+                key={drop.id}
+                className="absolute rounded-full"
+                style={{
+                  left: `${x}%`,
+                  top: `${y}%`,
+                  width: `${drop.widthPx}px`,
+                  height: `${drop.lengthPx}px`,
+                  transform: 'rotate(11deg)',
+                  opacity: drop.opacity,
+                  background:
+                    'linear-gradient(180deg, rgba(224, 242, 254, 0) 0%, rgba(224, 242, 254, 0.85) 65%, rgba(255, 255, 255, 0.95) 100%)',
+                }}
               />
-            </svg>
+            );
+          })}
+        </div>
+      )}
+
+      {/* 13. Weather Overlay: Layered Drifting Highland Morning Fog (Sương mù) */}
+      {isFoggy &&
+        FOG_BANDS.map((band) => {
+          const driftX = Math.sin(animTime * 0.24 * band.speed + band.phase) * 14;
+          const driftY = Math.cos(animTime * 0.3 + band.phase) * 1.4;
+          return (
+            <div
+              key={band.id}
+              className="absolute pointer-events-none"
+              aria-hidden="true"
+              style={{
+                top: `${band.topPct + driftY}%`,
+                left: `${-25 + driftX}%`,
+                width: `${band.widthPct}%`,
+                height: `${band.heightPct}%`,
+                zIndex: band.zIndex,
+                opacity: band.opacity,
+                background:
+                  'radial-gradient(ellipse 46% 62% at 28% 52%, rgba(248, 252, 255, 0.9) 0%, rgba(235, 245, 250, 0.5) 48%, rgba(235, 245, 250, 0) 76%), radial-gradient(ellipse 48% 58% at 72% 48%, rgba(244, 250, 253, 0.85) 0%, rgba(232, 243, 248, 0.44) 50%, rgba(232, 243, 248, 0) 78%)',
+              }}
+            />
           );
         })}
-      </div>
     </div>
   );
 };

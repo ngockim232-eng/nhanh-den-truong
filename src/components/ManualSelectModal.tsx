@@ -1,5 +1,6 @@
 import React from 'react';
 import { Check, UserCheck, X } from 'lucide-react';
+import { getChibiPreset, HAIR_STYLE_LABELS } from '../data/chibiCatalog';
 import { Student } from '../types';
 import { ChibiCharacterSVG } from './ChibiCharacterSVG';
 
@@ -28,7 +29,6 @@ export const ManualSelectModal: React.FC<ManualSelectModalProps> = ({
       return;
     }
     if (selectedIds.length >= maxCount) {
-      // Replace oldest pick cleanly
       onChangeSelectedIds([...selectedIds.slice(1), id]);
     } else {
       onChangeSelectedIds([...selectedIds, id]);
@@ -54,7 +54,7 @@ export const ManualSelectModal: React.FC<ManualSelectModalProps> = ({
             <div>
               <h2
                 id="manual-select-title"
-                className="text-lg sm:text-xl font-bold text-stone-900"
+                className="font-display text-lg sm:text-xl font-bold text-stone-900"
               >
                 Tùy Chọn Học Sinh Được Gọi
               </h2>
@@ -74,8 +74,9 @@ export const ManualSelectModal: React.FC<ManualSelectModalProps> = ({
         </div>
 
         <div className="flex-1 overflow-y-auto p-5 grid grid-cols-1 sm:grid-cols-2 gap-2.5 custom-scrollbar">
-          {students.map((stu) => {
+          {students.map((stu, idx) => {
             const isPicked = selectedIds.includes(stu.id);
+            const preset = getChibiPreset(stu.presetId, stu.gender, idx);
             return (
               <button
                 key={stu.id}
@@ -101,9 +102,15 @@ export const ManualSelectModal: React.FC<ManualSelectModalProps> = ({
                       </div>
                     </div>
                   )}
-                  <span className="font-semibold text-stone-900 truncate">
-                    {stu.name}
-                  </span>
+                  <div className="min-w-0">
+                    <span className="block font-semibold text-stone-900 truncate">
+                      {stu.name}
+                    </span>
+                    <span className="block text-xs text-stone-500 truncate">
+                      {stu.gender === 'female' ? 'Nữ' : 'Nam'} ·{' '}
+                      {HAIR_STYLE_LABELS[preset.hairStyle]}
+                    </span>
+                  </div>
                 </div>
 
                 <div
@@ -127,7 +134,7 @@ export const ManualSelectModal: React.FC<ManualSelectModalProps> = ({
           <button
             type="button"
             onClick={onClose}
-            className="px-6 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-sm cursor-pointer"
+            className="px-6 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-sm cursor-pointer whitespace-nowrap"
           >
             Xác nhận lựa chọn
           </button>

@@ -1,24 +1,45 @@
 import React, { useId } from 'react';
-import { ChibiAction, ChibiExpression, Student } from '../types';
+import { ChibiAction, ChibiExpression, ChibiPreset, Student } from '../types';
+import { getChibiPreset } from '../data/chibiCatalog';
 
 interface ChibiCharacterSVGProps {
-  student: Student;
+  student?: Student;
+  preset?: ChibiPreset;
   expression?: ChibiExpression;
   action?: ChibiAction;
   holdingFlower?: boolean;
-  animTime?: number; // seconds for smooth procedural motion
+  animTime?: number;
   facing?: 'left' | 'right' | 'front';
   className?: string;
 }
 
+const SKIN_TONES = {
+  fair: { light: '#fff4ec', mid: '#fde1d0', shade: '#efc3aa' },
+  warm: { light: '#ffefe2', mid: '#f8d4bc', shade: '#e3b091' },
+  sunlit: { light: '#fae5d2', mid: '#ecc09f', shade: '#d49d79' },
+};
+
+// Authentic handwoven Ca Dong brocade palette: Red, Black, Ivory White, Turmeric Gold
+const CADONG_RED = '#C8232C';
+const CADONG_RED_DEEP = '#9E1A22';
+const CADONG_WHITE = '#FBF7F0';
+const CADONG_GOLD = '#F2B705';
+const SCARF_RED = '#DC2626';
+const SCARF_DARK = '#B91C1C';
+
 /**
- * High-end 2D Animated Chibi Mascot wearing soft pastel Ca Dong traditional attire.
- * - Head = ~43% of total height, plump soft cheeks, luminous layered eyes.
- * - Fine warm-sepia outlines (never thick harsh black), pastel gradients & soft shading.
- * - 6 consistent fluffy hairstyles, 7 live facial expressions, rounded hands & feet.
+ * 30-character Ca Dong Student Chibi Renderer (Ages 8–14):
+ * - Natural child proportions (head ~37% height, balanced limbs, subtle age scale 8..14).
+ * - Innocent warm face, consistent upper-left morning lighting, soft warm sepia outlines.
+ * - Authentic handwoven Ca Dong brocade in Red, Black, Ivory White, Turmeric Gold:
+ *   • Girls: Brocade tunic + tiered handwoven Ca Dong skirt + beaded necklace
+ *   • Boys: Brocade traditional tunic + dark trousers with handwoven side/hem brocade & belt
+ * - Red Pioneer Scarf (khăn quàng đỏ) with animated fluttering tails + school backpack.
+ * - 6 diverse hairstyles (short, bangs, shoulder, braids, high_ponytail, twin_tails).
  */
 export const ChibiCharacterSVG: React.FC<ChibiCharacterSVGProps> = ({
   student,
+  preset: explicitPreset,
   expression = 'happy',
   action = 'idle',
   holdingFlower = false,
@@ -27,13 +48,28 @@ export const ChibiCharacterSVG: React.FC<ChibiCharacterSVGProps> = ({
   className = 'w-full h-full',
 }) => {
   const uid = useId().replace(/:/g, '');
-  const line = '#5b4238'; // Soft warm sepia outline
+  const line = '#4b352d';
+
+  const resolvedPreset =
+    explicitPreset ??
+    getChibiPreset(
+      student?.presetId,
+      student?.gender ?? 'male',
+      student?.hairStyle ?? 0,
+    );
+
+  const isFemale = resolvedPreset.gender === 'female';
+  const skin = SKIN_TONES[resolvedPreset.skinTone];
+  const ageNorm = (resolvedPreset.age - 8) / 6; // 0 (8yo) -> 1 (14yo)
+  const heightScaleY = 0.96 + ageNorm * 0.06; // subtle age proportion nuance
+  const headScale = 1.02 - ageNorm * 0.05; // slightly slimmer ratio for 12-14yo
 
   // Procedural smooth cycle offsets
   const isRunning = action === 'run' || expression === 'running';
   const isWavingGreet = action === 'wave_greet';
   const isBowingGreet = action === 'bow_greet';
-  const isWaving = expression === 'waving' || action === 'inside_yard' || isWavingGreet;
+  const isWaving =
+    expression === 'waving' || action === 'inside_yard' || isWavingGreet;
   const isPicking = action === 'pick_flower';
   const isCatching = action === 'catch_butterfly';
   const isThinking = expression === 'thinking';
@@ -44,427 +80,758 @@ export const ChibiCharacterSVG: React.FC<ChibiCharacterSVGProps> = ({
   const bounce = isRunning
     ? Math.abs(Math.sin(animTime * 8.2)) * -7.5
     : isCatching
-      ? Math.abs(Math.sin(animTime * 7.2)) * -10
+      ? Math.abs(Math.sin(animTime * 7.2)) * -9.5
       : isBowingGreet
-        ? 3 + Math.sin(animTime * 3.6) * 2
+        ? 3.5 + Math.sin(animTime * 3.6) * 2
         : isPicking
-          ? 4 + Math.sin(animTime * 4.2) * 3.2
+          ? 4.5 + Math.sin(animTime * 4.2) * 3
           : isWaving
-            ? Math.sin(animTime * 4.4) * -4.0
-            : Math.sin(animTime * 2.4) * -2;
+            ? Math.sin(animTime * 4.4) * -3.8
+            : Math.sin(animTime * 2.4) * -1.8;
 
   const bodyTilt = isBowingGreet
-    ? 13 + Math.sin(animTime * 3.6) * 3
+    ? 14 + Math.sin(animTime * 3.6) * 3
     : isPicking
-      ? 12 + Math.sin(animTime * 4.2) * 4.5
+      ? 13 + Math.sin(animTime * 4.2) * 4
       : isCatching
-        ? Math.sin(animTime * 3.8) * 6
+        ? Math.sin(animTime * 3.8) * 5.5
         : isRunning
-          ? 4.5
+          ? 4.2
           : isCurious
-            ? 4
+            ? 3.5
             : isSad
               ? -2
               : 0;
 
   const headTilt = isBowingGreet
-    ? 14 + Math.sin(animTime * 3.6) * 2.5
+    ? 15 + Math.sin(animTime * 3.6) * 2.5
     : isPicking
       ? -4 + Math.sin(animTime * 4.2) * 3
       : isCatching
-        ? Math.sin(animTime * 4.8) * 6
+        ? Math.sin(animTime * 4.8) * 5.5
         : isCurious
-          ? -8
+          ? -7.5
           : isThinking
             ? 6
             : isSad
-              ? 5
+              ? 4.5
               : isWaving
-                ? Math.sin(animTime * 3.8) * 4.5
-                : Math.sin(animTime * 2) * 2;
+                ? Math.sin(animTime * 3.8) * 4
+                : Math.sin(animTime * 2) * 1.8;
+
+  const scarfFlutter = isRunning
+    ? Math.sin(animTime * 11) * 7
+    : isCatching
+      ? Math.sin(animTime * 9) * 5.5
+      : Math.sin(animTime * 3.2) * 2.5;
 
   const leftLegRot = isRunning
     ? Math.sin(animTime * 8.2) * 22
     : isCatching
       ? Math.sin(animTime * 7.2) * 14
       : isWavingGreet
-        ? Math.sin(animTime * 4.4) * 7
+        ? Math.sin(animTime * 4.4) * 6
         : 0;
   const rightLegRot = isRunning
     ? -Math.sin(animTime * 8.2) * 22
     : isCatching
       ? -Math.sin(animTime * 7.2) * 14
       : isWavingGreet
-        ? -Math.sin(animTime * 4.4) * 7
+        ? -Math.sin(animTime * 4.4) * 6
         : 0;
 
   let leftArmRot = isRunning
     ? -Math.sin(animTime * 8.2) * 24
-    : Math.sin(animTime * 2.4) * 4;
+    : Math.sin(animTime * 2.4) * 3.5;
   let rightArmRot = isRunning
     ? Math.sin(animTime * 8.2) * 24
-    : -Math.sin(animTime * 2.4) * 4;
+    : -Math.sin(animTime * 2.4) * 3.5;
 
   if (isBowingGreet) {
-    leftArmRot = -20;
-    rightArmRot = 20;
+    leftArmRot = -22;
+    rightArmRot = 22;
   } else if (isWaving) {
-    rightArmRot = -136 + Math.sin(animTime * 10.5) * 20;
+    rightArmRot = -138 + Math.sin(animTime * 10.5) * 19;
     leftArmRot = 14;
   } else if (isPicking) {
-    rightArmRot = -52 + Math.sin(animTime * 4.8) * 11;
+    rightArmRot = -54 + Math.sin(animTime * 4.8) * 11;
     leftArmRot = 24 + Math.cos(animTime * 4.2) * 4;
   } else if (isCatching) {
-    const flapReach = Math.sin(animTime * 9.5) * 20;
+    const flapReach = Math.sin(animTime * 9.5) * 19;
     leftArmRot = 114 + flapReach;
     rightArmRot = -114 - flapReach;
   } else if (isThinking) {
-    rightArmRot = -108;
+    rightArmRot = -110;
     leftArmRot = 10;
   } else if (isSurprised) {
-    leftArmRot = 68;
-    rightArmRot = -68;
+    leftArmRot = 66;
+    rightArmRot = -66;
   } else if (isSad) {
     leftArmRot = 14;
     rightArmRot = -14;
   }
 
   const flipX = facing === 'left' ? -1 : 1;
-
-  // Slightly lighter tint helper for soft pastel hair shine
-  const hairStyle = student.hairStyle % 6;
+  const { hairStyle, brocadeVariant, accessory, neckStyle } = resolvedPreset;
 
   return (
     <svg
-      viewBox="-14 -20 268 334"
+      viewBox="-16 -22 272 346"
       className={className}
       xmlns="http://www.w3.org/2000/svg"
-      aria-label={student.name}
+      aria-label={student?.name || resolvedPreset.label}
     >
       <defs>
-        {/* Soft pastel skin shading */}
-        <radialGradient id={`skin-${uid}`} cx="50%" cy="42%" r="58%">
-          <stop offset="0%" stopColor="#fff2e9" />
-          <stop offset="68%" stopColor="#fde0cf" />
-          <stop offset="100%" stopColor="#f6c7b2" />
+        {/* Consistent upper-left morning illumination on skin */}
+        <radialGradient id={`skin-${uid}`} cx="38%" cy="34%" r="66%">
+          <stop offset="0%" stopColor={skin.light} />
+          <stop offset="65%" stopColor={skin.mid} />
+          <stop offset="100%" stopColor={skin.shade} />
         </radialGradient>
 
-        {/* Rosy airbrushed cheek blush */}
+        {/* Soft natural rosy cheek blush */}
         <radialGradient id={`blush-${uid}`} cx="50%" cy="50%" r="50%">
-          <stop offset="0%" stopColor="#f692a6" stopOpacity="0.65" />
-          <stop offset="65%" stopColor="#f9b4c2" stopOpacity="0.28" />
-          <stop offset="100%" stopColor="#f9b4c2" stopOpacity="0" />
+          <stop offset="0%" stopColor="#f38ba0" stopOpacity="0.58" />
+          <stop offset="68%" stopColor="#f8b4c2" stopOpacity="0.22" />
+          <stop offset="100%" stopColor="#f8b4c2" stopOpacity="0" />
         </radialGradient>
 
-        {/* Luminous layered iris gradient */}
+        {/* Luminous innocent eyes */}
         <linearGradient id={`iris-${uid}`} x1="0%" y1="0%" x2="0%" y2="100%">
-          <stop offset="0%" stopColor="#2f221e" />
-          <stop offset="48%" stopColor={student.eyeColor} />
-          <stop offset="100%" stopColor="#b98b73" />
+          <stop offset="0%" stopColor="#1e1715" />
+          <stop offset="52%" stopColor={resolvedPreset.eyeColor} />
+          <stop offset="100%" stopColor="#9c755d" />
         </linearGradient>
 
-        {/* Soft hair sheen gradient */}
-        <linearGradient id={`hair-${uid}`} x1="0%" y1="0%" x2="0%" y2="100%">
-          <stop offset="0%" stopColor={student.hairColor} />
-          <stop offset="100%" stopColor="#2b2122" />
+        {/* Hair with consistent upper-left sunlit sheen */}
+        <linearGradient id={`hair-${uid}`} x1="15%" y1="0%" x2="85%" y2="100%">
+          <stop offset="0%" stopColor={resolvedPreset.hairHighlight} />
+          <stop offset="38%" stopColor={resolvedPreset.hairColor} />
+          <stop offset="100%" stopColor="#181416" />
         </linearGradient>
 
-        {/* Pastel Ca Dong tunic gradient */}
-        <linearGradient id={`tunic-${uid}`} x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor={student.outfitColor} />
-          <stop offset="100%" stopColor="#2d374e" />
+        {/* Authentic deep black-indigo handwoven Ca Dong fabric */}
+        <linearGradient id={`tunic-${uid}`} x1="10%" y1="0%" x2="90%" y2="100%">
+          <stop offset="0%" stopColor="#2e3442" />
+          <stop offset="48%" stopColor={resolvedPreset.tunicBase} />
+          <stop offset="100%" stopColor="#12151c" />
+        </linearGradient>
+
+        {/* Backpack gentle shading */}
+        <linearGradient id={`pack-${uid}`} x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor={resolvedPreset.backpackColor} />
+          <stop offset="100%" stopColor="#1e293b" stopOpacity="0.92" />
+        </linearGradient>
+
+        {/* Red Pioneer Scarf smooth shading */}
+        <linearGradient id={`scarf-${uid}`} x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#ef4444" />
+          <stop offset="55%" stopColor={SCARF_RED} />
+          <stop offset="100%" stopColor={SCARF_DARK} />
         </linearGradient>
       </defs>
 
-      {/* Soft ground drop shadow */}
+      {/* Ground shadow */}
       <ellipse
         cx="120"
-        cy="292"
-        rx={isRunning ? 40 : 46}
-        ry="9"
-        fill="rgba(85, 68, 56, 0.17)"
+        cy="308"
+        rx={isRunning ? 38 : 44}
+        ry="8.5"
+        fill="rgba(75, 58, 46, 0.17)"
       />
 
-      {/* Full character transform group */}
+      {/* Main Character Group with natural child age proportion */}
       <g
-        transform={`translate(120, 0) scale(${flipX}, 1) translate(-120, ${bounce}) rotate(${bodyTilt}, 120, 235)`}
+        transform={`translate(120, 308) scale(${flipX}, ${heightScaleY}) translate(-120, ${-308 + bounce}) rotate(${bodyTilt}, 120, 244)`}
       >
-        {/* BACKPACK (peeking behind shoulders) */}
+        {/* SCHOOL BACKPACK (behind shoulders) */}
         <g>
           <rect
-            x="73"
-            y="156"
-            width="94"
-            height="74"
-            rx="24"
-            fill={student.backpackColor}
+            x="72"
+            y="148"
+            width="96"
+            height="78"
+            rx="22"
+            fill={resolvedPreset.backpackColor}
             stroke={line}
             strokeWidth="2"
           />
+          {/* Subtle top-left sunlit backpack sheen */}
           <rect
-            x="78"
-            y="160"
-            width="84"
-            height="24"
+            x="77"
+            y="152"
+            width="86"
+            height="26"
             rx="14"
-            fill={student.accentColor}
-            opacity="0.85"
+            fill={resolvedPreset.backpackTrim}
+            opacity="0.9"
+          />
+          <rect
+            x="82"
+            y="186"
+            width="76"
+            height="28"
+            rx="10"
+            fill="rgba(255,255,255,0.16)"
+            stroke={line}
+            strokeWidth="1.2"
+          />
+          {/* Side pocket accents */}
+          <rect
+            x="66"
+            y="176"
+            width="9"
+            height="30"
+            rx="4.5"
+            fill={resolvedPreset.backpackColor}
+            stroke={line}
+            strokeWidth="1.6"
+          />
+          <rect
+            x="165"
+            y="176"
+            width="9"
+            height="30"
+            rx="4.5"
+            fill={resolvedPreset.backpackColor}
+            stroke={line}
+            strokeWidth="1.6"
           />
         </g>
 
-        {/* BACK HAIR LAYER (unique fluffy styles behind head/neck) */}
-        <g fill={`url(#hair-${uid})`} stroke={line} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          {hairStyle === 0 && (
-            /* Fluffy twin soft puffs */
+        {/* BACK HAIR LAYER (for all 6 diverse hairstyles) */}
+        <g
+          fill={`url(#hair-${uid})`}
+          stroke={line}
+          strokeWidth="1.9"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          {hairStyle === 'short' && (
+            <path d="M68 88 C62 72, 68 44, 88 38 C100 28, 140 28, 152 38 C172 44, 178 72, 172 88 C172 106, 166 118, 158 122 L82 122 C74 118, 68 106, 68 88 Z" />
+          )}
+
+          {hairStyle === 'bangs' && (
+            <path
+              d={
+                isFemale
+                  ? 'M64 82 C54 112, 54 148, 70 162 C82 170, 94 162, 94 150 L146 150 C146 162, 158 170, 170 162 C186 148, 186 112, 176 82 Z'
+                  : 'M66 86 C60 66, 68 42, 88 36 C104 28, 136 28, 152 36 C172 42, 180 66, 174 86 C176 108, 168 124, 158 128 L82 128 C72 124, 64 108, 66 86 Z'
+              }
+            />
+          )}
+
+          {hairStyle === 'shoulder' && (
+            <path
+              d={
+                isFemale
+                  ? 'M62 82 C48 114, 46 156, 64 174 C76 184, 92 176, 94 162 L146 162 C148 176, 164 184, 176 174 C194 156, 192 114, 178 82 Z'
+                  : 'M64 84 C54 110, 56 140, 72 152 L168 152 C184 140, 186 110, 176 84 Z'
+              }
+            />
+          )}
+
+          {hairStyle === 'braids' && (
             <>
-              <ellipse cx="64" cy="96" rx="22" ry="26" />
-              <ellipse cx="176" cy="96" rx="22" ry="26" />
-              <circle cx="57" cy="68" r="17" />
-              <circle cx="183" cy="68" r="17" />
-              <path d="M58 79 Q64 72 72 78" fill="none" stroke={student.accentColor} strokeWidth="5" />
-              <path d="M168 78 Q176 72 182 79" fill="none" stroke={student.accentColor} strokeWidth="5" />
+              <path d="M64 88 C58 112, 62 136, 76 144 L164 144 C178 136, 182 112, 176 88 Z" />
+              {/* Left segmented braid */}
+              <ellipse cx="64" cy="116" rx="10" ry="12" />
+              <ellipse cx="61" cy="134" rx="9.5" ry="11.5" />
+              <ellipse cx="60" cy="151" rx="8.5" ry="11" />
+              <ellipse cx="61" cy="167" rx="7.5" ry="9.5" />
+              <path d="M58 175 L54 186 L64 182 L68 186 L65 175 Z" />
+              {/* Right segmented braid */}
+              <ellipse cx="176" cy="116" rx="10" ry="12" />
+              <ellipse cx="179" cy="134" rx="9.5" ry="11.5" />
+              <ellipse cx="180" cy="151" rx="8.5" ry="11" />
+              <ellipse cx="179" cy="167" rx="7.5" ry="9.5" />
+              <path d="M175 175 L172 186 L176 182 L186 186 L182 175 Z" />
+              {/* Ca Dong brocade hair ties */}
+              <rect x="54" y="170" width="14" height="5.5" rx="2.5" fill={CADONG_RED} />
+              <rect x="172" y="170" width="14" height="5.5" rx="2.5" fill={CADONG_RED} />
+              <circle cx="61" cy="172.7" r="1.8" fill={CADONG_GOLD} stroke="none" />
+              <circle cx="179" cy="172.7" r="1.8" fill={CADONG_GOLD} stroke="none" />
             </>
           )}
-          {hairStyle === 1 && (
-            /* Soft wavy shoulder-length bob */
-            <path d="M58 84 C44 114, 46 154, 66 168 C78 175, 92 168, 92 156 L148 156 C148 168, 162 175, 174 168 C194 154, 196 114, 182 84 Z" />
-          )}
-          {hairStyle === 2 && (
-            /* Short fluffy tousled boyish curls */
-            <path d="M58 92 C48 76, 54 50, 74 44 C86 30, 154 30, 166 44 C186 50, 192 76, 182 92 Z" />
-          )}
-          {hairStyle === 3 && (
-            /* Cute twin low wavy braids with pastel ribbons */
+
+          {hairStyle === 'high_ponytail' && (
             <>
-              <path d="M62 92 C48 118, 46 146, 56 164 C62 174, 72 170, 74 158 C76 140, 76 114, 74 96 Z" />
-              <path d="M178 92 C192 118, 194 146, 184 164 C178 174, 168 170, 166 158 C164 140, 164 114, 166 96 Z" />
-              <circle cx="62" cy="156" r="6" fill="#f28b82" />
-              <circle cx="178" cy="156" r="6" fill="#f28b82" />
+              {/* High flowing ponytail / topknot */}
+              {isFemale ? (
+                <>
+                  <path d="M120 28 C144 10, 178 24, 180 62 C182 92, 194 114, 184 134 C172 132, 162 114, 160 88 C158 66, 144 46, 120 42 Z" />
+                  <ellipse cx="120" cy="30" rx="16" ry="11" />
+                  <path d="M107 34 Q120 26 133 34" fill="none" stroke={CADONG_RED} strokeWidth="5.5" />
+                  <path d="M111 33 Q120 28 129 33" fill="none" stroke={CADONG_GOLD} strokeWidth="2" />
+                </>
+              ) : (
+                <>
+                  <ellipse cx="120" cy="24" rx="15" ry="13" />
+                  <path d="M108 32 Q120 27 132 32" fill="none" stroke={CADONG_RED} strokeWidth="4.5" />
+                </>
+              )}
+              <path d="M66 86 C60 108, 64 132, 78 140 L162 140 C176 132, 180 108, 174 86 Z" />
             </>
           )}
-          {hairStyle === 4 && (
-            /* Soft medium layered locks with cute side waves */
-            <path d="M56 90 C46 118, 54 150, 74 160 L166 160 C186 150, 194 118, 184 90 Z" />
-          )}
-          {hairStyle === 5 && (
-            /* Fluffy high top-bun / puff */
+
+          {hairStyle === 'twin_tails' && (
             <>
-              <circle cx="120" cy="30" r="21" />
-              <path d="M104 40 Q120 33 136 40" fill="none" stroke={student.backpackColor} strokeWidth="5" />
-              <path d="M60 94 C52 118, 56 144, 72 152 L168 152 C184 144, 188 118, 180 94 Z" />
+              {/* Left & right bouncy twin tails */}
+              <path d="M68 62 C44 58, 34 86, 40 122 C44 142, 34 156, 46 164 C58 162, 64 140, 66 116 C68 96, 70 78, 72 68 Z" />
+              <path d="M172 62 C196 58, 206 86, 200 122 C196 142, 206 156, 194 164 C182 162, 176 140, 174 116 C172 96, 170 78, 168 68 Z" />
+              {/* Twin Ca Dong red-gold ribbons */}
+              <ellipse cx="66" cy="65" rx="7" ry="5" fill={CADONG_RED} />
+              <ellipse cx="174" cy="65" rx="7" ry="5" fill={CADONG_RED} />
+              <circle cx="66" cy="65" r="2.2" fill={CADONG_GOLD} stroke="none" />
+              <circle cx="174" cy="65" r="2.2" fill={CADONG_GOLD} stroke="none" />
+              <path d="M66 88 C62 110, 68 130, 80 138 L160 138 C172 130, 178 110, 174 88 Z" />
             </>
           )}
         </g>
 
-        {/* LEGS & ROUNDED SHOES */}
+        {/* LEGS & SHOES (Natural child proportions for ages 8–14) */}
         <g>
           {/* Left Leg */}
           <g transform={`rotate(${leftLegRot}, 103, 232)`}>
-            <rect
-              x="92"
-              y="224"
-              width="21"
-              height="44"
-              rx="10"
-              fill="#46526d"
-              stroke={line}
-              strokeWidth="2"
-            />
-            <ellipse
-              cx="101"
-              cy="272"
-              rx="16"
-              ry="10"
-              fill="#7b5848"
-              stroke={line}
-              strokeWidth="2"
-            />
-            <ellipse cx="99" cy="269" rx="7" ry="3" fill="#a67c68" opacity="0.55" />
+            {isFemale ? (
+              <>
+                {/* Natural child lower leg + white school sock + neat dark shoe */}
+                <rect
+                  x="95"
+                  y="236"
+                  width="16"
+                  height="42"
+                  rx="8"
+                  fill={`url(#skin-${uid})`}
+                  stroke={line}
+                  strokeWidth="1.8"
+                />
+                <rect
+                  x="94.5"
+                  y="264"
+                  width="17"
+                  height="16"
+                  rx="4"
+                  fill={CADONG_WHITE}
+                  stroke={line}
+                  strokeWidth="1.5"
+                />
+                <ellipse
+                  cx="101"
+                  cy="288"
+                  rx="15"
+                  ry="8.5"
+                  fill="#3b2f2f"
+                  stroke={line}
+                  strokeWidth="1.9"
+                />
+                <path
+                  d="M93 284 Q102 288 111 284"
+                  fill="none"
+                  stroke={CADONG_RED}
+                  strokeWidth="2.2"
+                />
+              </>
+            ) : (
+              <>
+                {/* Traditional Ca Dong dark trouser leg with woven red-gold-white side stripe & hem */}
+                <rect
+                  x="91"
+                  y="222"
+                  width="22"
+                  height="60"
+                  rx="8"
+                  fill={`url(#tunic-${uid})`}
+                  stroke={line}
+                  strokeWidth="1.9"
+                />
+                {/* Vertical Ca Dong brocade side stripe */}
+                <rect x="93" y="226" width="3.5" height="48" fill={CADONG_RED} />
+                <line x1="94.7" y1="228" x2="94.7" y2="272" stroke={CADONG_GOLD} strokeWidth="1.2" strokeDasharray="3 3" />
+                {/* Woven trouser cuff */}
+                <rect x="91.5" y="272" width="21" height="6" fill={CADONG_RED} />
+                <line x1="91.5" y1="272" x2="112.5" y2="272" stroke={CADONG_GOLD} strokeWidth="1.5" />
+                <line x1="91.5" y1="278" x2="112.5" y2="278" stroke={CADONG_WHITE} strokeWidth="1.3" />
+                {/* Sturdy dark shoe */}
+                <ellipse
+                  cx="100"
+                  cy="288"
+                  rx="16"
+                  ry="8.5"
+                  fill="#3b2f2f"
+                  stroke={line}
+                  strokeWidth="1.9"
+                />
+                <ellipse cx="98" cy="285" rx="6.5" ry="2.6" fill="#6b5652" opacity="0.55" />
+              </>
+            )}
           </g>
 
           {/* Right Leg */}
           <g transform={`rotate(${rightLegRot}, 137, 232)`}>
-            <rect
-              x="127"
-              y="224"
-              width="21"
-              height="44"
-              rx="10"
-              fill="#46526d"
-              stroke={line}
-              strokeWidth="2"
-            />
-            <ellipse
-              cx="139"
-              cy="272"
-              rx="16"
-              ry="10"
-              fill="#7b5848"
-              stroke={line}
-              strokeWidth="2"
-            />
-            <ellipse cx="137" cy="269" rx="7" ry="3" fill="#a67c68" opacity="0.55" />
+            {isFemale ? (
+              <>
+                <rect
+                  x="129"
+                  y="236"
+                  width="16"
+                  height="42"
+                  rx="8"
+                  fill={`url(#skin-${uid})`}
+                  stroke={line}
+                  strokeWidth="1.8"
+                />
+                <rect
+                  x="128.5"
+                  y="264"
+                  width="17"
+                  height="16"
+                  rx="4"
+                  fill={CADONG_WHITE}
+                  stroke={line}
+                  strokeWidth="1.5"
+                />
+                <ellipse
+                  cx="139"
+                  cy="288"
+                  rx="15"
+                  ry="8.5"
+                  fill="#3b2f2f"
+                  stroke={line}
+                  strokeWidth="1.9"
+                />
+                <path
+                  d="M129 284 Q138 288 147 284"
+                  fill="none"
+                  stroke={CADONG_RED}
+                  strokeWidth="2.2"
+                />
+              </>
+            ) : (
+              <>
+                <rect
+                  x="127"
+                  y="222"
+                  width="22"
+                  height="60"
+                  rx="8"
+                  fill={`url(#tunic-${uid})`}
+                  stroke={line}
+                  strokeWidth="1.9"
+                />
+                <rect x="143.5" y="226" width="3.5" height="48" fill={CADONG_RED} />
+                <line x1="145.2" y1="228" x2="145.2" y2="272" stroke={CADONG_GOLD} strokeWidth="1.2" strokeDasharray="3 3" />
+                <rect x="127.5" y="272" width="21" height="6" fill={CADONG_RED} />
+                <line x1="127.5" y1="272" x2="148.5" y2="272" stroke={CADONG_GOLD} strokeWidth="1.5" />
+                <line x1="127.5" y1="278" x2="148.5" y2="278" stroke={CADONG_WHITE} strokeWidth="1.3" />
+                <ellipse
+                  cx="140"
+                  cy="288"
+                  rx="16"
+                  ry="8.5"
+                  fill="#3b2f2f"
+                  stroke={line}
+                  strokeWidth="1.9"
+                />
+                <ellipse cx="138" cy="285" rx="6.5" ry="2.6" fill="#6b5652" opacity="0.55" />
+              </>
+            )}
           </g>
         </g>
 
-        {/* LEFT ARM (soft rounded sleeve + brocade cuff + chubby rounded hand) */}
-        <g transform={`rotate(${leftArmRot}, 82, 166)`}>
+        {/* LEFT ARM (Ca Dong woven cuff + rounded child hand) */}
+        <g transform={`rotate(${leftArmRot}, 84, 158)`}>
           <path
-            d="M84 162 C68 168, 56 188, 60 206 C62 214, 74 214, 78 205 C84 192, 88 178, 90 168 Z"
+            d="M86 154 C70 162, 58 184, 62 206 C64 214, 75 214, 79 204 C85 190, 89 174, 91 162 Z"
             fill={`url(#tunic-${uid})`}
             stroke={line}
-            strokeWidth="2"
+            strokeWidth="1.9"
             strokeLinejoin="round"
           />
-          {/* Pastel Ca Dong sleeve cuff */}
+          {/* Handwoven Ca Dong sleeve cuff (red + gold + white) */}
           <path
-            d="M59 198 Q69 203 79 198 L77 207 Q68 211 60 206 Z"
-            fill="#e57373"
+            d="M61 196 Q70 201 80 196 L78 206 Q70 210 62 205 Z"
+            fill={CADONG_RED}
             stroke={line}
-            strokeWidth="1.5"
+            strokeWidth="1.4"
           />
-          {/* Rounded Chibi hand */}
+          <path d="M61.5 196 Q70 201 79.5 196" fill="none" stroke={CADONG_GOLD} strokeWidth="1.8" />
+          <path d="M62 204 Q70 208 78 204" fill="none" stroke={CADONG_WHITE} strokeWidth="1.4" />
           <circle
-            cx="67"
+            cx="69"
             cy="214"
-            r="10.5"
+            r="9.5"
             fill={`url(#skin-${uid})`}
             stroke={line}
-            strokeWidth="1.9"
+            strokeWidth="1.8"
           />
         </g>
 
-        {/* TORSO & AUTHENTIC PASTEL CA DONG BROCADE OUTFIT */}
+        {/* TORSO & AUTHENTIC HANDWOVEN CA DONG TRADITIONAL ATTIRE */}
         <g>
-          {/* Flared Ca Dong lower skirt/tunic hem */}
+          {/* LOWER GARMENT: Girl = Handwoven Brocade Skirt | Boy = Traditional Tunic Hem + Sash */}
+          {isFemale ? (
+            <g>
+              {/* Flared Traditional Ca Dong Brocade Skirt */}
+              <path
+                d="M84 202 L156 202 C168 228, 172 248, 166 258 C142 264, 98 264, 74 258 C68 248, 72 228, 84 202 Z"
+                fill={`url(#tunic-${uid})`}
+                stroke={line}
+                strokeWidth="2"
+                strokeLinejoin="round"
+              />
+              {/* Upper skirt gold & white woven stripe */}
+              <path d="M79 220 Q120 225 161 220" fill="none" stroke={CADONG_WHITE} strokeWidth="2.2" />
+              <path d="M78 224 Q120 229 162 224" fill="none" stroke={CADONG_GOLD} strokeWidth="2.2" />
+              {/* Wide Ca Dong Red Brocade Lower Band */}
+              <path
+                d="M74 234 Q120 240 166 234 L167 251 Q120 257 73 251 Z"
+                fill={CADONG_RED}
+              />
+              {/* Top & bottom handwoven trim lines */}
+              <path d="M74 234 Q120 240 166 234" fill="none" stroke={CADONG_GOLD} strokeWidth="2.3" />
+              <path d="M73 251 Q120 257 167 251" fill="none" stroke={CADONG_WHITE} strokeWidth="2.1" />
+              {/* Authentic geometric handwoven motif (varies across 3 brocade variants) */}
+              {brocadeVariant === 'classic_diamond' &&
+                [84, 98, 112, 126, 140, 154].map((dx) => (
+                  <g key={dx}>
+                    <polygon
+                      points={`${dx},238 ${dx + 4.5},243 ${dx},248 ${dx - 4.5},243`}
+                      fill={CADONG_GOLD}
+                    />
+                    <circle cx={dx} cy="243" r="1.5" fill={CADONG_WHITE} />
+                  </g>
+                ))}
+              {brocadeVariant === 'zigzag_mountain' && (
+                <path
+                  d="M76 246 L84 238 L92 246 L100 238 L108 246 L116 238 L124 246 L132 238 L140 246 L148 238 L156 246 L164 238"
+                  fill="none"
+                  stroke={CADONG_WHITE}
+                  strokeWidth="2.2"
+                  strokeLinejoin="round"
+                />
+              )}
+              {brocadeVariant === 'royal_stripe' && (
+                <>
+                  <path d="M74 242 Q120 248 166 242" fill="none" stroke={CADONG_GOLD} strokeWidth="3" />
+                  {[86, 103, 120, 137, 154].map((dx) => (
+                    <polygon
+                      key={dx}
+                      points={`${dx},237 ${dx + 3.5},242 ${dx},247 ${dx - 3.5},242`}
+                      fill={CADONG_WHITE}
+                    />
+                  ))}
+                </>
+              )}
+            </g>
+          ) : (
+            <g>
+              {/* Boy Traditional Ca Dong Tunic Lower Flap + Woven Belt */}
+              <path
+                d="M84 200 L156 200 L160 234 Q120 239 80 234 Z"
+                fill={`url(#tunic-${uid})`}
+                stroke={line}
+                strokeWidth="2"
+                strokeLinejoin="round"
+              />
+              {/* Bottom red-gold-white brocade tunic border */}
+              <path
+                d="M81 221 Q120 226 159 221 L160 232 Q120 237 80 232 Z"
+                fill={CADONG_RED}
+              />
+              <path d="M81 221 Q120 226 159 221" fill="none" stroke={CADONG_GOLD} strokeWidth="2.1" />
+              <path d="M80 232 Q120 237 160 232" fill="none" stroke={CADONG_WHITE} strokeWidth="1.8" />
+              {brocadeVariant === 'zigzag_mountain' ? (
+                <path
+                  d="M84 229 L92 224 L100 229 L108 224 L116 229 L124 224 L132 229 L140 224 L148 229 L156 224"
+                  fill="none"
+                  stroke={CADONG_WHITE}
+                  strokeWidth="1.9"
+                  strokeLinejoin="round"
+                />
+              ) : (
+                [90, 105, 120, 135, 150].map((dx) => (
+                  <polygon
+                    key={dx}
+                    points={`${dx},223.5 ${dx + 3.8},227 ${dx},230.5 ${dx - 3.8},227`}
+                    fill={CADONG_GOLD}
+                  />
+                ))
+              )}
+            </g>
+          )}
+
+          {/* UPPER CA DONG HANDWOVEN TUNIC */}
           <path
-            d="M84 202 L156 202 C164 222, 166 238, 160 244 C140 248, 100 248, 80 244 C74 238, 76 222, 84 202 Z"
+            d="M88 148 C84 166, 83 190, 84 205 Q120 210 156 205 C157 190, 156 166, 152 148 Z"
             fill={`url(#tunic-${uid})`}
             stroke={line}
             strokeWidth="2"
             strokeLinejoin="round"
           />
-          {/* Pastel Ca Dong brocade lower bands */}
+
+          {/* Ca Dong Chest Brocade Band (Red, Gold, White) */}
           <path
-            d="M78 229 Q120 233 162 229 L161 239 Q120 243 79 239 Z"
-            fill="#e57373"
+            d="M85 170 Q120 176 155 170 L155.5 182 Q120 188 84.5 182 Z"
+            fill={CADONG_RED}
           />
-          <path
-            d="M79 224 Q120 228 161 224"
-            fill="none"
-            stroke="#fde68a"
-            strokeWidth="2.5"
-          />
-          <path
-            d="M80 241 Q120 245 160 241"
-            fill="none"
-            stroke="#fffbeb"
-            strokeWidth="2"
-          />
-          {/* Geometric woven diamonds along hem */}
-          {[90, 105, 120, 135, 150].map((dx) => (
+          <path d="M85 170 Q120 176 155 170" fill="none" stroke={CADONG_GOLD} strokeWidth="2" />
+          <path d="M84.5 182 Q120 188 155.5 182" fill="none" stroke={CADONG_WHITE} strokeWidth="1.7" />
+          {[94, 107, 120, 133, 146].map((dx) => (
             <polygon
               key={dx}
-              points={`${dx},230 ${dx + 4},234 ${dx},238 ${dx - 4},234`}
-              fill="#fde68a"
+              points={`${dx},173 ${dx + 3.2},176.5 ${dx},180 ${dx - 3.2},176.5`}
+              fill={dx === 120 ? CADONG_WHITE : CADONG_GOLD}
             />
           ))}
 
-          {/* Upper Ca Dong Tunic */}
-          <path
-            d="M88 154 C84 168, 82 192, 84 205 Q120 210 156 205 C158 192, 156 168, 152 154 Z"
-            fill={`url(#tunic-${uid})`}
-            stroke={line}
-            strokeWidth="2"
-            strokeLinejoin="round"
-          />
+          {/* Vertical Front Woven Placket */}
+          {neckStyle === 'v_neck' ? (
+            <path
+              d="M108 149 L120 171 L132 149"
+              fill="none"
+              stroke={CADONG_GOLD}
+              strokeWidth="2.4"
+              strokeLinejoin="round"
+            />
+          ) : (
+            <rect x="115" y="182" width="10" height="22" rx="3" fill={CADONG_RED_DEEP} />
+          )}
 
-          {/* Ca Dong pastel chest yoke & vertical front woven placket */}
+          {/* Handwoven Ca Dong Waist Sash */}
           <path
-            d="M87 166 Q120 172 153 166 L154 176 Q120 182 86 176 Z"
-            fill="#e57373"
-          />
-          <path
-            d="M87 164 Q120 170 153 164"
-            fill="none"
-            stroke="#fde68a"
-            strokeWidth="2"
-          />
-          <rect x="114" y="176" width="12" height="28" rx="4" fill="#e57373" />
-          <polygon points="120,181 124,186 120,191 116,186" fill="#fffbeb" />
-          <polygon points="120,192 124,197 120,202 116,197" fill="#a7f3d0" />
-
-          {/* Woven pastel waist sash */}
-          <path
-            d="M83 200 Q120 206 157 200 L156 208 Q120 214 84 208 Z"
-            fill="#f28b82"
+            d="M83 198 Q120 204 157 198 L156 207 Q120 213 84 207 Z"
+            fill={CADONG_RED}
             stroke={line}
             strokeWidth="1.6"
           />
+          <path d="M84 202.5 Q120 208.5 156 202.5" fill="none" stroke={CADONG_GOLD} strokeWidth="2" strokeDasharray="5 3" />
+          {/* Traditional woven sash tassel */}
+          {!isFemale && (
+            <g>
+              <path d="M142 206 L146 222" stroke={CADONG_RED} strokeWidth="4" strokeLinecap="round" />
+              <circle cx="146" cy="222" r="2.6" fill={CADONG_GOLD} />
+            </g>
+          )}
 
-          {/* Traditional Ca Dong Pastel Beaded Necklace */}
-          {[98, 105, 112, 120, 128, 135, 142].map((bx, i) => (
-            <circle
-              key={bx}
-              cx={bx}
-              cy={158 + Math.sin((i / 6) * Math.PI) * 7}
-              r="3.4"
-              fill={i % 2 === 0 ? '#fffbeb' : '#fde68a'}
-              stroke={line}
-              strokeWidth="1.1"
+          {/* Traditional Ca Dong White & Gold Beaded Necklace (Girls) */}
+          {isFemale &&
+            [98, 105, 112, 120, 128, 135, 142].map((bx, i) => (
+              <circle
+                key={bx}
+                cx={bx}
+                cy={163 + Math.sin((i / 6) * Math.PI) * 6}
+                r="2.8"
+                fill={i % 2 === 0 ? CADONG_WHITE : CADONG_GOLD}
+                stroke={line}
+                strokeWidth="0.9"
+              />
+            ))}
+
+          {/* School Backpack Shoulder Straps */}
+          <path
+            d="M93 148 Q88 174 92 199"
+            fill="none"
+            stroke={resolvedPreset.backpackColor}
+            strokeWidth="6.5"
+            strokeLinecap="round"
+          />
+          <path
+            d="M93 148 Q88 174 92 199"
+            fill="none"
+            stroke={resolvedPreset.backpackTrim}
+            strokeWidth="1.8"
+            strokeDasharray="4 4"
+            strokeLinecap="round"
+          />
+          <path
+            d="M147 148 Q152 174 148 199"
+            fill="none"
+            stroke={resolvedPreset.backpackColor}
+            strokeWidth="6.5"
+            strokeLinecap="round"
+          />
+          <path
+            d="M147 148 Q152 174 148 199"
+            fill="none"
+            stroke={resolvedPreset.backpackTrim}
+            strokeWidth="1.8"
+            strokeDasharray="4 4"
+            strokeLinecap="round"
+          />
+
+          {/* RED PIONEER SCARF (KHĂN QUÀNG ĐỎ ĐỘI VIÊN) */}
+          <g>
+            {/* Collar wrap around neck */}
+            <path
+              d="M99 144 Q120 156 141 144 L145 153 Q120 166 95 153 Z"
+              fill={`url(#scarf-${uid})`}
+              stroke="#7f1d1d"
+              strokeWidth="1.5"
+              strokeLinejoin="round"
             />
-          ))}
-
-          {/* Pastel Backpack Shoulder Straps */}
-          <path
-            d="M93 155 Q89 178 93 198"
-            fill="none"
-            stroke={student.backpackColor}
-            strokeWidth="6.5"
-            strokeLinecap="round"
-          />
-          <path
-            d="M147 155 Q151 178 147 198"
-            fill="none"
-            stroke={student.backpackColor}
-            strokeWidth="6.5"
-            strokeLinecap="round"
-          />
+            {/* Fluttering scarf tails */}
+            <g transform={`rotate(${scarfFlutter}, 120, 158)`}>
+              <path
+                d="M116 158 L108 188 L119 183 L121 159 Z"
+                fill={SCARF_RED}
+                stroke="#7f1d1d"
+                strokeWidth="1.4"
+                strokeLinejoin="round"
+              />
+              <path
+                d="M124 158 L133 191 L122 185 L120 159 Z"
+                fill={`url(#scarf-${uid})`}
+                stroke="#7f1d1d"
+                strokeWidth="1.4"
+                strokeLinejoin="round"
+              />
+            </g>
+            {/* Crisp triangular Pioneer knot */}
+            <polygon
+              points="114,154 126,154 123,163 117,163"
+              fill="#ef4444"
+              stroke="#7f1d1d"
+              strokeWidth="1.4"
+              strokeLinejoin="round"
+            />
+          </g>
         </g>
 
-        {/* RIGHT ARM (with flower prop if picking/holding) */}
-        <g transform={`rotate(${rightArmRot}, 158, 166)`}>
+        {/* RIGHT ARM (with wildflower when picking/holding) */}
+        <g transform={`rotate(${rightArmRot}, 156, 158)`}>
           <path
-            d="M156 162 C172 168, 184 188, 180 206 C178 214, 166 214, 162 205 C156 192, 152 178, 150 168 Z"
+            d="M154 154 C170 162, 182 184, 178 206 C176 214, 165 214, 161 204 C155 190, 151 174, 149 162 Z"
             fill={`url(#tunic-${uid})`}
             stroke={line}
-            strokeWidth="2"
+            strokeWidth="1.9"
             strokeLinejoin="round"
           />
           <path
-            d="M181 198 Q171 203 161 198 L163 207 Q172 211 180 206 Z"
-            fill="#e57373"
+            d="M179 196 Q170 201 160 196 L162 206 Q170 210 178 205 Z"
+            fill={CADONG_RED}
             stroke={line}
-            strokeWidth="1.5"
+            strokeWidth="1.4"
           />
-          {/* Rounded Chibi hand */}
+          <path d="M178.5 196 Q170 201 160.5 196" fill="none" stroke={CADONG_GOLD} strokeWidth="1.8" />
+          <path d="M178 204 Q170 208 162 204" fill="none" stroke={CADONG_WHITE} strokeWidth="1.4" />
           <circle
-            cx="173"
+            cx="171"
             cy="214"
-            r="10.5"
+            r="9.5"
             fill={`url(#skin-${uid})`}
             stroke={line}
-            strokeWidth="1.9"
+            strokeWidth="1.8"
           />
 
-          {/* Held realistic wildflower in hand */}
+          {/* Held wildflower prop */}
           {(holdingFlower || isPicking) && (
-            <g transform="translate(174, 214) rotate(28)">
+            <g transform="translate(173, 214) rotate(26)">
               <path
                 d="M0 4 Q2 -14 0 -30"
                 fill="none"
                 stroke="#4d9b56"
-                strokeWidth="3.2"
+                strokeWidth="3"
                 strokeLinecap="round"
               />
               <path
@@ -473,192 +840,197 @@ export const ChibiCharacterSVG: React.FC<ChibiCharacterSVGProps> = ({
                 stroke="#3f7d47"
                 strokeWidth="1.1"
               />
-              {/* 5 soft golden petals */}
               {[0, 72, 144, 216, 288].map((deg) => (
                 <ellipse
                   key={deg}
                   cx="0"
                   cy="-36"
-                  rx="4.6"
-                  ry="8.2"
+                  rx="4.4"
+                  ry="8"
                   fill="#fde047"
                   stroke="#d97706"
                   strokeWidth="1.1"
                   transform={`rotate(${deg}, 0, -30)`}
                 />
               ))}
-              <circle cx="0" cy="-30" r="4.5" fill="#f59e0b" />
+              <circle cx="0" cy="-30" r="4.3" fill="#f59e0b" />
             </g>
           )}
         </g>
 
         {/* NECK */}
         <rect
-          x="111"
-          y="142"
-          width="18"
+          x="111.5"
+          y="133"
+          width="17"
           height="18"
-          rx="8"
-          fill="#f6c7b2"
+          rx="7.5"
+          fill={skin.shade}
           stroke={line}
-          strokeWidth="1.8"
+          strokeWidth="1.7"
         />
 
-        {/* BIG ADORABLE CHIBI HEAD (~43% height) */}
-        <g transform={`rotate(${headTilt}, 120, 146)`}>
-          {/* Cute Rounded Ears */}
+        {/* HEAD GROUP (Natural 8–14 child Chibi proportion, ~37% of total height) */}
+        <g
+          transform={`translate(120, 142) scale(${headScale}) translate(-120, -142) rotate(${headTilt}, 120, 142)`}
+        >
+          {/* Rounded Ears */}
           <ellipse
-            cx="63"
-            cy="104"
-            rx="10"
-            ry="13"
+            cx="68"
+            cy="98"
+            rx="9"
+            ry="11.5"
             fill={`url(#skin-${uid})`}
             stroke={line}
-            strokeWidth="1.9"
+            strokeWidth="1.8"
           />
           <ellipse
-            cx="177"
-            cy="104"
-            rx="10"
-            ry="13"
+            cx="172"
+            cy="98"
+            rx="9"
+            ry="11.5"
             fill={`url(#skin-${uid})`}
             stroke={line}
-            strokeWidth="1.9"
+            strokeWidth="1.8"
           />
 
-          {/* Plump Soft Chibi Face Contour */}
+          {/* Innocent Child Face Contour */}
           <path
-            d="M64 96 C62 52, 90 36, 120 36 C150 36, 178 52, 176 96 C174 134, 150 152, 120 152 C90 152, 66 134, 64 96 Z"
+            d="M69 90 C67 49, 92 34, 120 34 C148 34, 173 49, 171 90 C169 125, 147 142, 120 142 C93 142, 71 125, 69 90 Z"
             fill={`url(#skin-${uid})`}
             stroke={line}
-            strokeWidth="2.1"
+            strokeWidth="2"
             strokeLinejoin="round"
           />
 
-          {/* Rosy Natural Cheek Blush */}
-          <ellipse cx="83" cy="116" rx="14" ry="9" fill={`url(#blush-${uid})`} />
-          <ellipse cx="157" cy="116" rx="14" ry="9" fill={`url(#blush-${uid})`} />
-          <line x1="77" y1="115" x2="81" y2="119" stroke="#f08299" strokeWidth="1.4" strokeLinecap="round" opacity="0.65" />
-          <line x1="83" y1="115" x2="87" y2="119" stroke="#f08299" strokeWidth="1.4" strokeLinecap="round" opacity="0.65" />
-          <line x1="153" y1="115" x2="157" y2="119" stroke="#f08299" strokeWidth="1.4" strokeLinecap="round" opacity="0.65" />
-          <line x1="159" y1="115" x2="163" y2="119" stroke="#f08299" strokeWidth="1.4" strokeLinecap="round" opacity="0.65" />
+          {/* Soft Cheek Blush */}
+          <ellipse cx="86" cy="109" rx="13" ry="8" fill={`url(#blush-${uid})`} />
+          <ellipse cx="154" cy="109" rx="13" ry="8" fill={`url(#blush-${uid})`} />
 
-          {/* LUMINOUS CHIBI EYES */}
-          {[93, 147].map((cx, eyeIdx) => {
-            const lookShiftX = isThinking ? 3.5 : isCurious ? (eyeIdx === 0 ? 1.5 : 1.5) : 0;
-            const lookShiftY = isThinking ? -3 : 0;
-            const eyeScaleY = isSurprised ? 1.14 : isSad ? 0.94 : 1;
+          {/* LUMINOUS INNOCENT EYES */}
+          {[95, 145].map((cx, eyeIdx) => {
+            const lookShiftX = isThinking ? 3.2 : isCurious ? 1.5 : 0;
+            const lookShiftY = isThinking ? -2.8 : 0;
+            const eyeScaleY = isSurprised ? 1.13 : isSad ? 0.92 : 1;
 
             return (
               <g
                 key={cx}
-                transform={`translate(${cx}, 100) scale(1, ${eyeScaleY})`}
+                transform={`translate(${cx}, 94) scale(1, ${eyeScaleY})`}
               >
-                {/* Soft sclera */}
-                <ellipse cx="0" cy="0" rx="14" ry="15.5" fill="#ffffff" />
-                {/* Upper eyelid soft shadow */}
+                <ellipse cx="0" cy="0" rx="12.6" ry="14" fill="#ffffff" />
                 <path
-                  d="M-13 -4 Q0 -15 13 -4"
+                  d="M-11.5 -3.5 Q0 -13.5 11.5 -3.5"
                   fill="none"
-                  stroke="rgba(91,66,56,0.18)"
-                  strokeWidth="3.5"
+                  stroke="rgba(75,53,45,0.16)"
+                  strokeWidth="3"
                 />
-                {/* Rich glossy iris */}
                 <ellipse
                   cx={lookShiftX}
                   cy={1 + lookShiftY}
-                  rx={isSurprised ? 9.5 : 11.2}
-                  ry={isSurprised ? 11.5 : 13.2}
+                  rx={isSurprised ? 8.6 : 10}
+                  ry={isSurprised ? 10.5 : 11.8}
                   fill={`url(#iris-${uid})`}
                 />
-                {/* Deep pupil */}
                 <circle
                   cx={lookShiftX}
-                  cy={1.5 + lookShiftY}
-                  r={isSurprised ? 4.4 : 5.4}
-                  fill="#231815"
+                  cy={1.4 + lookShiftY}
+                  r={isSurprised ? 4 : 4.8}
+                  fill="#1e1512"
                 />
-                {/* Lower luminous crescent reflection */}
                 <path
-                  d="M-6 8 Q0 12 6 8"
+                  d="M-5 7 Q0 10.5 5 7"
                   fill="none"
                   stroke="#fde68a"
-                  strokeWidth="2.2"
+                  strokeWidth="2"
                   strokeLinecap="round"
-                  opacity="0.7"
+                  opacity="0.68"
                 />
-                {/* Crisp white catchlights for lively anime soul */}
+                {/* Upper-left consistent light catchlight */}
                 <circle
-                  cx={-4.2 + lookShiftX * 0.4}
-                  cy={-4.5 + lookShiftY * 0.4}
-                  r="4.1"
+                  cx={-3.8 + lookShiftX * 0.4}
+                  cy={-4 + lookShiftY * 0.4}
+                  r="3.6"
                   fill="#ffffff"
                 />
                 <circle
-                  cx={4.5 + lookShiftX * 0.4}
-                  cy={4.5 + lookShiftY * 0.4}
-                  r="1.9"
+                  cx={3.8 + lookShiftX * 0.4}
+                  cy={4 + lookShiftY * 0.4}
+                  r="1.7"
                   fill="#ffffff"
                 />
-                {/* Watery tear highlight when sad */}
                 {isSad && (
                   <ellipse
-                    cx="-5"
-                    cy="9"
-                    rx="4"
-                    ry="2.4"
+                    cx="-4.5"
+                    cy="8"
+                    rx="3.6"
+                    ry="2.2"
                     fill="#bae6fd"
                     opacity="0.9"
                   />
                 )}
-                {/* Soft curved upper eyelash line */}
+                {/* Upper eyelash (delicately winged for girls, crisp natural for boys) */}
                 <path
-                  d="M-15 -2 C-12 -15, 12 -15, 15 -2"
+                  d="M-13.5 -1.5 C-10.5 -13.5, 10.5 -13.5, 13.5 -1.5"
                   fill="none"
                   stroke={line}
-                  strokeWidth="2.6"
+                  strokeWidth={isFemale ? '2.5' : '2.3'}
                   strokeLinecap="round"
                 />
-                <path
-                  d={eyeIdx === 0 ? 'M-15 -2 L-18 -5' : 'M15 -2 L18 -5'}
-                  fill="none"
-                  stroke={line}
-                  strokeWidth="2.1"
-                  strokeLinecap="round"
-                />
+                {isFemale && (
+                  <path
+                    d={eyeIdx === 0 ? 'M-13.5 -1.5 L-17 -4.5' : 'M13.5 -1.5 L17 -4.5'}
+                    fill="none"
+                    stroke={line}
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                  />
+                )}
               </g>
             );
           })}
 
-          {/* EXPRESSIVE EYEBROWS */}
+          {/* EYEBROWS */}
           {isSad ? (
             <>
-              <path d="M80 79 Q92 76 102 72" fill="none" stroke={line} strokeWidth="2.1" strokeLinecap="round" />
-              <path d="M160 79 Q148 76 138 72" fill="none" stroke={line} strokeWidth="2.1" strokeLinecap="round" />
+              <path d="M83 74 Q94 71 103 68" fill="none" stroke={line} strokeWidth="2" strokeLinecap="round" />
+              <path d="M157 74 Q146 71 137 68" fill="none" stroke={line} strokeWidth="2" strokeLinecap="round" />
             </>
           ) : isSurprised ? (
             <>
-              <path d="M81 71 Q93 64 103 71" fill="none" stroke={line} strokeWidth="2.1" strokeLinecap="round" />
-              <path d="M137 71 Q147 64 159 71" fill="none" stroke={line} strokeWidth="2.1" strokeLinecap="round" />
+              <path d="M84 67 Q95 61 104 67" fill="none" stroke={line} strokeWidth="2" strokeLinecap="round" />
+              <path d="M136 67 Q145 61 156 67" fill="none" stroke={line} strokeWidth="2" strokeLinecap="round" />
             </>
           ) : isCurious ? (
             <>
-              <path d="M81 74 Q92 67 103 73" fill="none" stroke={line} strokeWidth="2.1" strokeLinecap="round" />
-              <path d="M137 78 Q148 76 159 78" fill="none" stroke={line} strokeWidth="2.1" strokeLinecap="round" />
+              <path d="M84 70 Q94 64 104 69" fill="none" stroke={line} strokeWidth="2" strokeLinecap="round" />
+              <path d="M136 74 Q146 72 156 74" fill="none" stroke={line} strokeWidth="2" strokeLinecap="round" />
             </>
           ) : (
             <>
-              <path d="M82 77 Q93 73 103 77" fill="none" stroke={line} strokeWidth="2" strokeLinecap="round" />
-              <path d="M137 77 Q147 73 158 77" fill="none" stroke={line} strokeWidth="2" strokeLinecap="round" />
+              <path
+                d="M84 73 Q95 69 104 73"
+                fill="none"
+                stroke={line}
+                strokeWidth={isFemale ? '1.8' : '2.2'}
+                strokeLinecap="round"
+              />
+              <path
+                d="M136 73 Q145 69 156 73"
+                fill="none"
+                stroke={line}
+                strokeWidth={isFemale ? '1.8' : '2.2'}
+                strokeLinecap="round"
+              />
             </>
           )}
 
-          {/* TINY CUTE NOSE */}
+          {/* SMALL NATURAL NOSE */}
           <path
-            d="M119 112 Q121 114 119 116"
+            d="M119 105 Q121 107 119 109"
             fill="none"
-            stroke="#c68f78"
-            strokeWidth="1.8"
+            stroke="#b8836b"
+            strokeWidth="1.7"
             strokeLinecap="round"
           />
 
@@ -666,101 +1038,166 @@ export const ChibiCharacterSVG: React.FC<ChibiCharacterSVGProps> = ({
           {isSurprised ? (
             <ellipse
               cx="120"
-              cy="128"
-              rx="6"
-              ry="7.5"
-              fill="#f28b82"
+              cy="120"
+              rx="5.5"
+              ry="7"
+              fill="#ef7b7b"
               stroke={line}
-              strokeWidth="1.8"
+              strokeWidth="1.7"
             />
           ) : isSad ? (
             <path
-              d="M112 131 Q120 124 128 131"
+              d="M112 123 Q120 116.5 128 123"
               fill="none"
               stroke={line}
-              strokeWidth="2"
+              strokeWidth="1.9"
               strokeLinecap="round"
             />
           ) : isThinking ? (
             <path
-              d="M115 128 Q121 129 125 127"
+              d="M115 120 Q121 121 125 119"
               fill="none"
               stroke={line}
-              strokeWidth="2"
+              strokeWidth="1.9"
               strokeLinecap="round"
             />
           ) : isCurious ? (
-            /* Playful cat smile :3 */
             <path
-              d="M111 126 Q115.5 132 120 126 Q124.5 132 129 126"
+              d="M112 119 Q116 124 120 119 Q124 124 128 119"
               fill="none"
               stroke={line}
-              strokeWidth="2"
+              strokeWidth="1.9"
               strokeLinecap="round"
             />
           ) : (
-            /* Bright happy Chibi smile */
             <path
-              d="M110 124 Q120 135 130 124 Z"
-              fill="#f48fb1"
+              d="M111 117 Q120 127 129 117 Z"
+              fill="#f08299"
               stroke={line}
-              strokeWidth="1.9"
+              strokeWidth="1.8"
               strokeLinejoin="round"
             />
           )}
 
-          {/* Tiny surprised sweat/exclamation drop */}
           {isSurprised && (
             <path
-              d="M168 62 C164 70, 164 76, 168 76 C172 76, 172 70, 168 62 Z"
+              d="M164 58 C160 66, 160 72, 164 72 C168 72, 168 66, 164 58 Z"
               fill="#bae6fd"
               stroke="#60a5fa"
-              strokeWidth="1.4"
+              strokeWidth="1.3"
             />
           )}
 
-          {/* FLUFFY LAYERED FRONT HAIR WITH SOFT INDIVIDUAL STRANDS */}
-          <g fill={`url(#hair-${uid})`} stroke={line} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path
-              d={
-                hairStyle % 2 === 0
-                  ? 'M62 94 C60 48, 88 32, 120 32 C152 32, 180 48, 178 94 C174 82, 168 74, 162 88 C156 72, 146 66, 138 82 C132 66, 122 64, 118 82 C110 64, 96 66, 90 84 C82 70, 70 76, 62 94 Z'
-                  : 'M62 94 C60 48, 88 32, 120 32 C152 32, 180 48, 178 94 C172 74, 160 70, 152 86 C144 68, 128 66, 120 84 C112 66, 94 70, 86 86 C78 72, 68 76, 62 94 Z'
-              }
-            />
-            {/* Soft wispy side locks framing cheeks */}
-            <path d="M62 88 C58 106, 62 122, 70 126 C67 112, 68 98, 72 88 Z" />
-            <path d="M178 88 C182 106, 178 122, 170 126 C173 112, 172 98, 168 88 Z" />
-            {/* Cute fluffy top ahoge / sprout strand */}
-            <path
-              d="M118 33 Q126 16 140 22 Q128 24 123 34 Z"
-            />
+          {/* FRONT HAIR LAYER (distinctly sculpted per 6 hairstyles & gender) */}
+          <g
+            fill={`url(#hair-${uid})`}
+            stroke={line}
+            strokeWidth="1.9"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            {hairStyle === 'short' && (
+              <>
+                <path d="M67 88 C65 46, 90 30, 120 30 C150 30, 175 46, 173 88 C168 74, 160 64, 152 76 C144 60, 134 56, 126 70 C118 54, 106 56, 100 72 C92 58, 78 66, 67 88 Z" />
+                {!isFemale && (
+                  <path d="M112 31 Q118 18 130 23 Q122 26 118 32 Z" />
+                )}
+              </>
+            )}
+
+            {hairStyle === 'bangs' && (
+              <>
+                {/* Full soft straight/feathered bangs */}
+                <path d="M66 90 C64 46, 90 30, 120 30 C150 30, 176 46, 174 90 C168 78, 162 76, 156 80 L146 78 L142 82 L128 79 L120 83 L112 79 L98 82 L94 78 L84 80 C78 76, 72 78, 66 90 Z" />
+                <path d="M66 84 C63 102, 66 116, 73 120 C70 108, 71 96, 74 86 Z" />
+                <path d="M174 84 C177 102, 174 116, 167 120 C170 108, 169 96, 166 86 Z" />
+              </>
+            )}
+
+            {hairStyle === 'shoulder' && (
+              <>
+                {/* Side-parted soft layered fringe */}
+                <path d="M66 90 C64 46, 90 30, 120 30 C150 30, 176 46, 174 90 C168 72, 156 64, 142 74 C128 60, 108 60, 94 76 C84 68, 74 74, 66 90 Z" />
+                <path d="M66 84 C60 108, 64 130, 74 136 C71 120, 72 102, 75 88 Z" />
+                <path d="M174 84 C180 108, 176 130, 166 136 C169 120, 168 102, 165 88 Z" />
+              </>
+            )}
+
+            {(hairStyle === 'braids' ||
+              hairStyle === 'high_ponytail' ||
+              hairStyle === 'twin_tails') && (
+              <>
+                <path d="M67 88 C65 46, 90 30, 120 30 C150 30, 175 46, 173 88 C168 74, 158 68, 150 82 C142 66, 128 62, 120 78 C112 62, 98 66, 90 82 C82 68, 72 74, 67 88 Z" />
+                <path d="M67 84 C63 102, 66 116, 73 120 C70 108, 71 96, 74 86 Z" />
+                <path d="M173 84 C177 102, 174 116, 167 120 C170 108, 169 96, 166 86 Z" />
+              </>
+            )}
           </g>
 
-          {/* Soft pastel hair shine arc */}
+          {/* Consistent upper-left morning hair shine */}
           <path
-            d="M84 54 Q104 44 126 48"
+            d="M84 50 Q104 40 124 44"
             fill="none"
             stroke="rgba(255,255,255,0.28)"
-            strokeWidth="4.5"
+            strokeWidth="4"
             strokeLinecap="round"
           />
 
-          {/* Ca Dong Woven Pastel Headband */}
-          <path
-            d="M72 64 Q120 48 168 64 L165 73 Q120 58 75 73 Z"
-            fill="#e57373"
-            stroke={line}
-            strokeWidth="1.8"
-            strokeLinejoin="round"
-          />
-          {[92, 106, 120, 134, 148].map((hx, idx) => (
-            <polygon
-              key={hx}
-              points={`${hx},${60 + Math.abs(idx - 2) * 1.5} ${hx + 3.5},${63 + Math.abs(idx - 2) * 1.5} ${hx},${66 + Math.abs(idx - 2) * 1.5} ${hx - 3.5},${63 + Math.abs(idx - 2) * 1.5}`}
-              fill="#fde68a"
-            />
-          ))}
+          {/* TRADITIONAL CA DONG HAIR ACCESSORIES */}
+          {accessory === 'brocade_headband' && (
+            <g>
+              <path
+                d="M74 60 Q120 45 166 60 L163 68.5 Q120 54 77 68.5 Z"
+                fill={CADONG_RED}
+                stroke={line}
+                strokeWidth="1.6"
+                strokeLinejoin="round"
+              />
+              {[92, 106, 120, 134, 148].map((hx, idx) => (
+                <polygon
+                  key={hx}
+                  points={`${hx},${56 + Math.abs(idx - 2) * 1.4} ${hx + 3},${59 + Math.abs(idx - 2) * 1.4} ${hx},${62 + Math.abs(idx - 2) * 1.4} ${hx - 3},${59 + Math.abs(idx - 2) * 1.4}`}
+                  fill={idx % 2 === 0 ? CADONG_GOLD : CADONG_WHITE}
+                />
+              ))}
+            </g>
+          )}
+
+          {accessory === 'red_ribbon' && (
+            <g transform="translate(154, 56) rotate(18)">
+              <path d="M0 0 L-10 -6 L-10 6 Z" fill={CADONG_RED} stroke={line} strokeWidth="1.3" />
+              <path d="M0 0 L10 -6 L10 6 Z" fill={CADONG_RED} stroke={line} strokeWidth="1.3" />
+              <circle cx="0" cy="0" r="3" fill={CADONG_GOLD} stroke={line} strokeWidth="1.1" />
+            </g>
+          )}
+
+          {accessory === 'flower_clip' && (
+            <g transform="translate(82, 62)">
+              {[0, 72, 144, 216, 288].map((deg) => (
+                <ellipse
+                  key={deg}
+                  cx="0"
+                  cy="-5"
+                  rx="3"
+                  ry="4.8"
+                  fill={CADONG_WHITE}
+                  stroke="#d97706"
+                  strokeWidth="0.9"
+                  transform={`rotate(${deg})`}
+                />
+              ))}
+              <circle cx="0" cy="0" r="2.8" fill={CADONG_GOLD} />
+            </g>
+          )}
+
+          {accessory === 'gold_bead_pin' && (
+            <g transform="translate(152, 66) rotate(-14)">
+              <rect x="-8" y="-2.5" width="16" height="5" rx="2.5" fill={CADONG_RED} stroke={line} strokeWidth="1.1" />
+              <circle cx="-4" cy="0" r="1.7" fill={CADONG_GOLD} />
+              <circle cx="0" cy="0" r="1.7" fill={CADONG_WHITE} />
+              <circle cx="4" cy="0" r="1.7" fill={CADONG_GOLD} />
+            </g>
+          )}
         </g>
       </g>
     </svg>
